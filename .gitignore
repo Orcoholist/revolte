@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.android/
+.ios/
+.capacitor/
+.DS_Store
+*.log
+
+# Koda Configuration
+# Локальный конфиг .koda/ версионируется
+# Глобальный конфиг игнорируется
+!.koda/
+.koda/secrets/

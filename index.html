@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a1a2e">
+  <title>Revolt Racing</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      overflow: hidden;
+      background: #1a1a2e;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    #game-container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+    canvas {
+      display: block;
+    }
+    #ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    #hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: #fff;
+      font-size: 18px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    #speedometer {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      color: #fff;
+      font-size: 32px;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+    #controls-hint {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.7);
+      font-size: 14px;
+      text-align: center;
+    }
+    #start-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      pointer-events: auto;
+      color: #fff;
+      z-index: 100;
+    }
+    #start-screen h1 {
+      font-size: 48px;
+      margin-bottom: 20px;
+      color: #ff6b6b;
+    }
+    #loading-bar {
+      width: 300px;
+      height: 8px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 4px;
+      margin: 20px 0;
+      overflow: hidden;
+    }
+    #loading-progress {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #ff6b6b, #ff8e8e);
+      transition: width 0.3s;
+    }
+    #loading-text {
+      font-size: 14px;
+      color: rgba(255,255,255,0.7);
+    }
+    #start-btn {
+      padding: 15px 40px;
+      font-size: 24px;
+      background: #ff6b6b;
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    #start-btn:hover {
+      transform: scale(1.05);
+    }
+    #result-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      pointer-events: auto;
+      color: #fff;
+      z-index: 101;
+    }
+    #result-screen h1 {
+      font-size: 48px;
+      margin-bottom: 10px;
+      color: #ffd700;
+      text-shadow: 0 0 20px #ffd700;
+    }
+    #result-screen .trophy {
+      font-size: 80px;
+      margin-bottom: 20px;
+      animation: bounce 1s infinite;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-20px); }
+    }
+    #result-screen .stat {
+      font-size: 24px;
+      margin: 10px 0;
+      color: #fff;
+    }
+    #result-screen .stat-label {
+      color: rgba(255,255,255,0.7);
+      margin-right: 10px;
+    }
+    #result-screen .stat-value {
+      color: #00ff00;
+      font-weight: bold;
+      font-size: 28px;
+    }
+    #restart-btn {
+      margin-top: 30px;
+      padding: 15px 40px;
+      font-size: 24px;
+      background: linear-gradient(135deg, #ffd700, #ffaa00);
+      border: none;
+      border-radius: 10px;
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    #restart-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+    }
+    #menu-btn {
+      margin-top: 15px;
+      padding: 12px 35px;
+      font-size: 18px;
+      background: rgba(255,255,255,0.2);
+      border: 2px solid rgba(255,255,255,0.5);
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #menu-btn:hover {
+      background: rgba(255,255,255,0.3);
+    }
+    #mobile-controls {
+      display: none;
+      position: absolute;
+      bottom: 80px;
+      left: 20px;
+      pointer-events: auto;
+    }
+    #minimap-container {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 150px;
+      height: 150px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid #fff;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    #minimap {
+      width: 100%;
+      height: 100%;
+    }
+    #minimap-car {
+      position: absolute;
+      width: 8px;
+      height: 8px;
+      background: #ff6b6b;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .control-btn {
+      width: 60px;
+      height: 60px;
+      background: rgba(255,255,255,0.3);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      margin: 5px;
+      font-size: 24px;
+      color: #fff;
+      touch-action: manipulation;
+    }
+    .control-row {
+      display: flex;
+      gap: 10px;
+    }
+    #flip-btn {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 24px;
+      font-size: 18px;
+      background: rgba(255, 107, 107, 0.8);
+      border: 2px solid #fff;
+      border-radius: 10px;
+      color: #fff;
+      cursor: pointer;
+      pointer-events: auto;
+      display: none;
+      touch-action: manipulation;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+    }
+    #flip-btn:hover {
+      background: rgba(255, 107, 107, 1);
+    }
+    #nitro-container {
+      position: absolute;
+      bottom: 80px;
+      right: 20px;
+      width: 120px;
+      height: 40px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 2px solid #00aaff;
+      border-radius: 10px;
+      overflow: hidden;
+      pointer-events: auto;
+    }
+    #nitro-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #0066cc, #00aaff, #00ffff);
+      transition: width 0.1s;
+    }
+    #nitro-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #fff;
+      font-size: 12px;
+      font-weight: bold;
+      text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+      pointer-events: none;
+    }
+    #nitro-btn {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      width: 80px;
+      height: 80px;
+      background: rgba(0, 170, 255, 0.6);
+      border: 3px solid #00ffff;
+      border-radius: 50%;
+      font-size: 14px;
+      color: #fff;
+      font-weight: bold;
+      cursor: pointer;
+      pointer-events: auto;
+      touch-action: manipulation;
+      display: none;
+    }
+    #nitro-btn:active {
+      background: rgba(0, 255, 255, 0.8);
+      transform: scale(0.95);
+    }
+    @media (hover: none) and (pointer: coarse) {
+      #controls-hint {
+        display: none;
+      }
+      #mobile-controls {
+        display: block;
+      }
+      #nitro-btn {
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="ui-layer">
+      <div id="hud">
+        <div>Lap: <span id="lap">1</span>/3</div>
+        <div>Time: <span id="time">0.00</span>s</div>
+        <div>Best: <span id="best">--</span></div>
+        <div id="checkpoint-distance" style="margin-top: 8px; color: #ff6600; font-weight: bold;">🎯 --м</div>
+      </div>
+      <div id="minimap-container">
+        <canvas id="minimap"></canvas>
+        <div id="minimap-car"></div>
+      </div>
+      <div id="speedometer"><span id="speed">0</span> km/h</div>
+      <div id="nitro-container">
+        <div id="nitro-bar"></div>
+        <div id="nitro-text">100%</div>
+      </div>
+      <div id="controls-hint">
+        WASD / Стрелки — управление<br>
+        Пробел — тормоз · Shift — нитро · R — перевернуть
+      </div>
+      <div id="mobile-controls">
+        <div class="control-row">
+          <button class="control-btn" id="btn-left">←</button>
+          <button class="control-btn" id="btn-right">→</button>
+        </div>
+        <div class="control-row">
+          <button class="control-btn" id="btn-brake">🛑</button>
+          <button class="control-btn" id="btn-gas">⛽</button>
+        </div>
+      </div>
+      <button id="flip-btn">🔄 Перевернуть</button>
+      <button id="nitro-btn">NITRO</button>
+    </div>
+    <div id="start-screen">
+      <h1>🏎️ REVOLT RACING</h1>
+      <div id="loading-bar">
+        <div id="loading-progress"></div>
+      </div>
+      <div id="loading-text">Загрузка моделей...</div>
+      <button id="start-btn" style="display:none">START RACE</button>
+    </div>
+    
+    <div id="result-screen">
+      <div class="trophy">🏆</div>
+      <h1>ФИНИШ!</h1>
+      <div class="stat">
+        <span class="stat-label">Время:</span>
+        <span id="final-time" class="stat-value">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Круги:</span>
+        <span id="final-laps" class="stat-value">--</span>
+      </div>
+      <button id="restart-btn">ЕЩЁ РАЗ</button>
+      <button id="menu-btn">МЕНЮ</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
+
+npm run dev

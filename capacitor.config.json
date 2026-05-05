@@ -1,0 +1,12 @@
+{
+  "appId": "com.revolt.racing",
+  "appName": "Revolt Racing",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true
+  }
+}

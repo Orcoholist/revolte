@@ -1,0 +1,11 @@
+Model Information:
+* title:	Subaru Impreza Rally Car 99 GT4
+* source:	https://sketchfab.com/3d-models/subaru-impreza-rally-car-99-gt4-652cfccae1ef45c7851d57fcc26f8106
+* author:	mvmodsbussid (https://sketchfab.com/VetoAshofar_JR)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Subaru Impreza Rally Car 99 GT4" (https://sketchfab.com/3d-models/subaru-impreza-rally-car-99-gt4-652cfccae1ef45c7851d57fcc26f8106) by mvmodsbussid (https://sketchfab.com/VetoAshofar_JR) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
