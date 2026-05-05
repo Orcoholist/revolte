@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:vercel": "vercel deploy --prod",
+    "deploy:github": "gh-pages -d dist"
   },
   "dependencies": {
     "three": "^0.160.0",
