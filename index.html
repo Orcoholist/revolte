@@ -154,6 +154,55 @@
       font-weight: bold;
       font-size: 28px;
     }
+    #leaderboard {
+      margin: 20px 0;
+      width: 90%;
+      max-width: 500px;
+      border-collapse: collapse;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+    }
+    #leaderboard th {
+      background: linear-gradient(135deg, #ffd700, #ffaa00);
+      color: #000;
+      padding: 12px 15px;
+      font-size: 16px;
+      font-weight: bold;
+      text-align: left;
+    }
+    #leaderboard td {
+      padding: 10px 15px;
+      font-size: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    #leaderboard tr:nth-child(even) {
+      background: rgba(255,255,255,0.05);
+    }
+    #leaderboard tr.player-row {
+      background: rgba(255, 107, 107, 0.3);
+      font-weight: bold;
+    }
+    #leaderboard tr:first-child td:first-child {
+      color: #ffd700;
+    }
+    #leaderboard tr:nth-child(2) td:first-child {
+      color: #c0c0c0;
+    }
+    #leaderboard tr:nth-child(3) td:first-child {
+      color: #cd7f32;
+    }
+    .position-badge {
+      display: inline-block;
+      width: 30px;
+      height: 30px;
+      line-height: 30px;
+      text-align: center;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      font-weight: bold;
+      margin-right: 8px;
+    }
     #restart-btn {
       margin-top: 30px;
       padding: 15px 40px;
@@ -187,9 +236,131 @@
     #mobile-controls {
       display: none;
       position: absolute;
-      bottom: 80px;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    #mobile-steer-zone {
+      position: absolute;
+      bottom: 40px;
       left: 20px;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 70%, transparent 100%);
+      border: 2px solid rgba(255,255,255,0.12);
       pointer-events: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      backdrop-filter: blur(4px);
+      touch-action: none;
+    }
+    #mobile-steer-zone .steer-btn {
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 100%);
+      border: 1.5px solid rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      touch-action: none;
+      user-select: none;
+      transition: all 0.1s ease;
+      font-weight: bold;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15);
+    }
+    #mobile-steer-zone .steer-btn:active, #mobile-steer-zone .steer-btn.active {
+      background: radial-gradient(circle at 40% 35%, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.12) 100%);
+      border-color: rgba(255,255,255,0.4);
+      transform: scale(0.92);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+    #mobile-action-zone {
+      position: absolute;
+      bottom: 40px;
+      right: 20px;
+      width: 140px;
+      height: 200px;
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      touch-action: none;
+    }
+    #mobile-action-zone .action-btn {
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      touch-action: none;
+      user-select: none;
+      transition: all 0.1s ease;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    #btn-gas {
+      background: radial-gradient(circle at 40% 35%, #4ade80 0%, #16a34a 100%);
+      border: 2px solid rgba(74, 222, 128, 0.5);
+      font-size: 32px;
+      color: #fff;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    #btn-gas:active, #btn-gas.active {
+      transform: scale(0.90);
+      box-shadow: 0 0 30px rgba(74, 222, 128, 0.5);
+      border-color: #4ade80;
+    }
+    #btn-brake {
+      width: 70px;
+      height: 70px;
+      background: radial-gradient(circle at 40% 35%, #f87171 0%, #dc2626 100%);
+      border: 2px solid rgba(248, 113, 113, 0.5);
+      font-size: 24px;
+      color: #fff;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    #btn-brake:active, #btn-brake.active {
+      transform: scale(0.92);
+      box-shadow: 0 0 25px rgba(248, 113, 113, 0.5);
+      border-color: #f87171;
+    }
+    .mobile-label {
+      position: absolute;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: rgba(255,255,255,0.25);
+      pointer-events: none;
+    }
+    #mobile-controls .label-gas {
+      bottom: 95px;
+      right: 65px;
+    }
+    #mobile-controls .label-brake {
+      bottom: 8px;
+      right: 60px;
+    }
+    #mobile-controls .label-left {
+      bottom: -5px;
+      left: 50px;
+    }
+    #mobile-controls .label-right {
+      bottom: -5px;
+      right: 50px;
     }
     #minimap-container {
       position: absolute;
@@ -214,21 +385,6 @@
       border-radius: 50%;
       transform: translate(-50%, -50%);
     }
-    .control-btn {
-      width: 60px;
-      height: 60px;
-      background: rgba(255,255,255,0.3);
-      border: 2px solid #fff;
-      border-radius: 50%;
-      margin: 5px;
-      font-size: 24px;
-      color: #fff;
-      touch-action: manipulation;
-    }
-    .control-row {
-      display: flex;
-      gap: 10px;
-    }
     #flip-btn {
       position: absolute;
       bottom: 20px;
@@ -249,67 +405,6 @@
     #flip-btn:hover {
       background: rgba(255, 107, 107, 1);
     }
-    #nitro-container {
-      position: absolute;
-      bottom: 80px;
-      right: 20px;
-      width: 120px;
-      height: 40px;
-      background: rgba(0, 0, 0, 0.5);
-      border: 2px solid #00aaff;
-      border-radius: 10px;
-      overflow: hidden;
-      pointer-events: auto;
-    }
-    #nitro-bar {
-      width: 0%;
-      height: 100%;
-      background: linear-gradient(90deg, #0066cc, #00aaff, #00ffff);
-      transition: width 0.1s;
-    }
-    #nitro-text {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: #fff;
-      font-size: 12px;
-      font-weight: bold;
-      text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-      pointer-events: none;
-    }
-    #nitro-btn {
-      position: absolute;
-      bottom: 20px;
-      right: 20px;
-      width: 80px;
-      height: 80px;
-      background: rgba(0, 170, 255, 0.6);
-      border: 3px solid #00ffff;
-      border-radius: 50%;
-      font-size: 14px;
-      color: #fff;
-      font-weight: bold;
-      cursor: pointer;
-      pointer-events: auto;
-      touch-action: manipulation;
-      display: none;
-    }
-    #nitro-btn:active {
-      background: rgba(0, 255, 255, 0.8);
-      transform: scale(0.95);
-    }
-    @media (hover: none) and (pointer: coarse) {
-      #controls-hint {
-        display: none;
-      }
-      #mobile-controls {
-        display: block;
-      }
-      #nitro-btn {
-        display: block;
-      }
-    }
   </style>
 </head>
 <body>
@@ -326,53 +421,50 @@
         <div id="minimap-car"></div>
       </div>
       <div id="speedometer"><span id="speed">0</span> km/h</div>
-      <div id="nitro-container">
-        <div id="nitro-bar"></div>
-        <div id="nitro-text">100%</div>
-      </div>
       <div id="controls-hint">
         WASD / Стрелки — управление<br>
-        Пробел — тормоз · Shift — нитро · R — перевернуть
+        Пробел — тормоз · R — перевернуть · Ctrl — предмет
       </div>
       <div id="mobile-controls">
-        <div class="control-row">
-          <button class="control-btn" id="btn-left">←</button>
-          <button class="control-btn" id="btn-right">→</button>
+        <div id="mobile-steer-zone">
+          <button class="steer-btn" id="btn-left">◀</button>
+          <button class="steer-btn" id="btn-right">▶</button>
+          <span class="mobile-label label-left">LEFT</span>
+          <span class="mobile-label label-right">RIGHT</span>
         </div>
-        <div class="control-row">
-          <button class="control-btn" id="btn-brake">🛑</button>
-          <button class="control-btn" id="btn-gas">⛽</button>
+        <div id="mobile-action-zone">
+          <button class="action-btn" id="btn-gas">⛽</button>
+          <button class="action-btn" id="btn-brake">✕</button>
+          <span class="mobile-label label-gas">GAS</span>
+          <span class="mobile-label label-brake">BRAKE</span>
         </div>
       </div>
       <button id="flip-btn">🔄 Перевернуть</button>
-      <button id="nitro-btn">NITRO</button>
     </div>
     <div id="start-screen">
       <h1>🏎️ REVOLT RACING</h1>
       <div id="loading-bar">
         <div id="loading-progress"></div>
       </div>
-      <div id="loading-text">Загрузка моделей...</div>
-      <button id="start-btn" style="display:none">START RACE</button>
+      <div id="loading-text">Загрузка модели...</div>
+      <button id="start-btn" style="display: none;">🏁 СТАРТ</button>
     </div>
-    
     <div id="result-screen">
       <div class="trophy">🏆</div>
-      <h1>ФИНИШ!</h1>
+      <h1>ГОНКА ЗАВЕРШЕНА!</h1>
       <div class="stat">
         <span class="stat-label">Время:</span>
-        <span id="final-time" class="stat-value">--</span>
+        <span class="stat-value" id="final-time">0.00s</span>
       </div>
       <div class="stat">
         <span class="stat-label">Круги:</span>
-        <span id="final-laps" class="stat-value">--</span>
+        <span class="stat-value" id="final-laps">0</span>
       </div>
-      <button id="restart-btn">ЕЩЁ РАЗ</button>
-      <button id="menu-btn">МЕНЮ</button>
+      <button id="restart-btn">🔄 Ещё раз</button>
+      <button id="menu-btn">📋 Меню</button>
     </div>
   </div>
+
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>
-
-npm run dev

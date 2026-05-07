@@ -14,7 +14,6 @@ export class CarController {
 
     this.input = { forward: false, backward: false, left: false, right: false, brake: false };
     this.speed = 0; // км/ч
-    this.nitroActive = false;
     
     // Инерция поворота (для плавности)
     this.currentSteer = 0;
@@ -60,11 +59,6 @@ export class CarController {
       let engineForce = 0;
       if (this.input.forward) engineForce = cfg.engineForce;
       if (this.input.backward) engineForce = -cfg.engineForce;
-
-      // Применяем множитель нитро
-      if (this.nitroActive) {
-        engineForce *= 1.5;
-      }
 
       this.vehicle.applyEngineForce(engineForce, 2);
       this.vehicle.applyEngineForce(engineForce, 3);
@@ -124,7 +118,7 @@ export class CarController {
 
     // --- Скорость ---
     const v = this.chassisBody.velocity;
-    this.speed = Math.sqrt(v.x * v.x + v.z * v.z) * 3.6;
+    this.speed = Math.sqrt(v.x * v.x + v.z * v.z) * 1.0;
   }
 
   /**
@@ -179,24 +173,29 @@ export class CarController {
   }
 
   /**
-   * Активирует нитро-ускорение
+   * Применяет временное ускорение (предмет boost/superboost)
+   * @param {number} multiplier - множитель силы двигателя (1.5, 2.5 и т.д.)
+   * @param {number} duration - длительность в миллисекундах
    */
-  activateNitro() {
-    this.nitroActive = true;
-  }
-
-  /**
-   * Деактивирует нитро-ускорение
-   */
-  deactivateNitro() {
-    this.nitroActive = false;
-  }
-
-  /**
-   * Проверяет, активно ли нитро
-   */
-  isNitroActive() {
-    return this.nitroActive;
+  applyBoost(multiplier, duration) {
+    const cfg = CONFIG.car;
+    const originalForce = cfg.engineForce;
+    
+    // Устанавливаем увеличенную силу
+    const boostedForce = originalForce * multiplier;
+    this.vehicle.applyEngineForce(boostedForce, 2);
+    this.vehicle.applyEngineForce(boostedForce, 3);
+    
+    // Возвращаем нормальную силу через duration мс
+    setTimeout(() => {
+      // Возвращаем к нормальной силе (если не нажаты кнопки)
+      if (!this.input.forward && !this.input.backward) {
+        this.vehicle.applyEngineForce(0, 2);
+        this.vehicle.applyEngineForce(0, 3);
+      }
+    }, duration);
+    
+    console.log('Boost applied: ' + multiplier + 'x for ' + duration + 'ms');
   }
 
   /**

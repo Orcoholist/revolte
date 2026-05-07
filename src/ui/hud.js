@@ -9,8 +9,6 @@ export class HUD {
     this.elTime = document.getElementById('time');
     this.elLap = document.getElementById('lap');
     this.elBest = document.getElementById('best');
-    this.elNitro = document.getElementById('nitro-bar');
-    this.elNitroText = document.getElementById('nitro-text');
     this.elCheckpointDist = document.getElementById('checkpoint-distance');
 
     // Миникарта
@@ -20,7 +18,7 @@ export class HUD {
     this.canvas.height = 150;
   }
 
-  update(carController, state, nitroSystem, lapCounter = null) {
+  update(carController, state, lapCounter = null) {
     this.elSpeed.textContent = Math.round(carController.speed);
 
     if (state.isPlaying) {
@@ -51,29 +49,6 @@ export class HUD {
             this.elCheckpointDist.style.color = '#ff6600';
           }
         }
-      }
-    }
-
-    // Обновляем индикатор нитро
-    if (nitroSystem) {
-      const amount = nitroSystem.getAmount();
-      this.elNitro.style.width = amount + '%';
-      this.elNitroText.textContent = Math.round(amount) + '%';
-      
-      // Изменяем цвет в зависимости от запаса
-      if (amount > 70) {
-        this.elNitro.style.backgroundColor = '#00ffff';
-      } else if (amount > 30) {
-        this.elNitro.style.backgroundColor = '#00aaff';
-      } else {
-        this.elNitro.style.backgroundColor = '#0066cc';
-      }
-      
-      // Подсветка при активном нитро
-      if (nitroSystem.isNitroActive()) {
-        this.elNitro.parentElement.style.boxShadow = '0 0 20px #00ffff';
-      } else {
-        this.elNitro.parentElement.style.boxShadow = 'none';
       }
     }
 

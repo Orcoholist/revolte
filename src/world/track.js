@@ -329,6 +329,9 @@ export function createTrack(scene, world) {
   obstacles.push(createCone(new THREE.Vector3(175, 6, -95), scene));
   obstacles.push(createCone(new THREE.Vector3(165, 4, -110), scene));
   
+  // --- Зоны ускорения (бустеры) на трассе ---
+  const boosters = createBoostZones(scene, segments, W);
+  
   // --- Декорации ---
   createTrackDecorations(scene);
   
@@ -368,6 +371,142 @@ function createTrackDecorations(scene) {
     light.position.set(pos[0] + 1, 8, pos[2]);
     scene.add(light);
   }
+}
+
+/**
+ * Создаёт зоны ускорения (бустеры) на прямых участках трассы
+ * Визуально: светящиеся полосы на дороге
+ */
+function createBoostZones(scene, segments, roadWidth) {
+  const boosters = [];
+  const halfW = roadWidth / 2;
+  
+  // Позиции бустеров: на длинных прямых участках трассы
+  const boosterPositions = [
+    // Стартовая прямая - зона ускорения после старта
+    { segmentIdx: 50, length: 30 },
+    // Прямая вниз после поворота
+    { segmentIdx: 150, length: 25 },
+    // Прямая после змейки
+    { segmentIdx: 280, length: 20 },
+    // Прямая на мосту
+    { segmentIdx: 350, length: 15 },
+  ];
+  
+  for (const bp of boosterPositions) {
+    if (bp.segmentIdx >= segments.length) continue;
+    
+    // Создаём цепочку бустерных полос
+    const count = Math.floor(bp.length / 3);
+    for (let j = 0; j < count; j++) {
+      const idx = Math.min(bp.segmentIdx + j * 3, segments.length - 1);
+      const pos = segments[idx];
+      
+      // Светящаяся полоса
+      const boosterGeo = new THREE.PlaneGeometry(halfW * 0.8, 1.2);
+      const boosterMat = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.4 + Math.sin(j * 1.5) * 0.3,
+        side: THREE.DoubleSide
+      });
+      const booster = new THREE.Mesh(boosterGeo, boosterMat);
+      booster.rotation.x = -Math.PI / 2;
+      booster.position.set(pos.x, 0.03, pos.z);
+      
+      // Определяем направление дороги в этой точке
+      const nextIdx = Math.min(idx + 3, segments.length - 1);
+      if (nextIdx < segments.length) {
+        const dir = new THREE.Vector3().subVectors(segments[nextIdx], pos).normalize();
+        booster.rotation.z = -Math.atan2(dir.z, dir.x);
+      }
+      
+      scene.add(booster);
+      boosters.push(booster);
+      
+      // Дополнительные боковые индикаторы (стрелки)
+      if (j % 2 === 0) {
+        for (const side of [-1, 1]) {
+          const arrowGeo = new THREE.ConeGeometry(0.3, 0.8, 4);
+          const arrowMat = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 0.6
+          });
+          const arrow = new THREE.Mesh(arrowGeo, arrowMat);
+          arrow.rotation.x = Math.PI / 2;
+          arrow.position.set(pos.x + side * halfW * 0.5, 0.05, pos.z);
+          scene.add(arrow);
+          boosters.push(arrow);
+        }
+      }
+    }
+    
+    // Добавляем большие порталы/арки в начале и конце зоны бустера
+    const startIdx = bp.segmentIdx;
+    const endIdx = Math.min(bp.segmentIdx + bp.length, segments.length - 1);
+    
+    // Арка входа
+    createBoosterPortal(scene, segments[startIdx], halfW, 0x00ffff);
+    // Арка выхода
+    createBoosterPortal(scene, segments[endIdx], halfW, 0xff00ff);
+  }
+  
+  return boosters;
+}
+
+/**
+ * Создаёт портал/арку для зоны ускорения
+ */
+function createBoosterPortal(scene, pos, halfW, color) {
+  const portalMat = new THREE.MeshBasicMaterial({
+    color: color,
+    transparent: true,
+    opacity: 0.15,
+    side: THREE.DoubleSide
+  });
+  const portalMatBright = new THREE.MeshBasicMaterial({
+    color: color,
+    transparent: true,
+    opacity: 0.4
+  });
+  
+  // Вертикальные стойки
+  const pillarHeight = 5;
+  const pillarGeo = new THREE.BoxGeometry(0.3, pillarHeight, 0.3);
+  
+  for (const side of [-1, 1]) {
+    const pillar = new THREE.Mesh(pillarGeo, portalMatBright);
+    pillar.position.set(
+      pos.x + side * halfW * 0.6,
+      pillarHeight / 2,
+      pos.z
+    );
+    scene.add(pillar);
+    
+    // Свечение вокруг стоек
+    const glowGeo = new THREE.BoxGeometry(0.6, pillarHeight, 0.6);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: 0.08
+    });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.copy(pillar.position);
+    scene.add(glow);
+  }
+  
+  // Верхняя перекладина
+  const topGeo = new THREE.BoxGeometry(halfW * 1.2, 0.3, 0.3);
+  const top = new THREE.Mesh(topGeo, portalMatBright);
+  top.position.set(pos.x, pillarHeight, pos.z);
+  scene.add(top);
+  
+  // Свечение портала (полупрозрачная плоскость)
+  const portalGeo = new THREE.PlaneGeometry(halfW * 1.4, pillarHeight * 1.2);
+  const portal = new THREE.Mesh(portalGeo, portalMat);
+  portal.position.set(pos.x, pillarHeight / 2, pos.z);
+  scene.add(portal);
 }
 
 function addRoadSegment(scene, a, b, width, mat) {

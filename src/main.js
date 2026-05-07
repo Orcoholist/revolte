@@ -5,12 +5,14 @@ import { createPhysicsWorld } from './engine/physics.js';
 import { createTrack } from './world/track.js';
 import { createEnvironment } from './world/environment.js';
 import { preloadCarModel, createCarMesh, createWheelMeshes, createCarPhysics } from './car/carFactory.js';
+import { recolorCarModel } from './car/carModelLoader.js';
 import { CarController } from './car/carController.js';
+import { BotManager } from './car/botManager.js';
 import { InputManager } from './controls/input.js';
 import { HUD } from './ui/hud.js';
 import { initTelegram } from './ui/telegram.js';
-import { NitroSystem } from './engine/nitroSystem.js';
 import { LapCounter } from './world/lapCounter.js';
+import { ItemSystem } from './world/itemSystem.js';
 
 // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
@@ -21,9 +23,6 @@ createLighting(scene);
 
 // Передаём scene в particleSystem
 particleSystem.scene = scene;
-
-// Создаём систему нитро
-const nitroSystem = new NitroSystem(scene);
 
 const { world, groundMat, wheelMat } = createPhysicsWorld();
 
@@ -42,6 +41,23 @@ window.state = {
   lap: 1,
   maxLaps: 3
 };
+
+// Система отсчёта кругов (создаём сразу, не зависит от модели)
+window.lapCounter = new LapCounter(
+  track.segments,
+  track.spawnPos,
+  (lapNumber) => {
+    console.log(`🏁 Круг ${lapNumber} завершен!`);
+    window.state.lap = lapNumber;
+    if (lapNumber >= window.state.maxLaps) {
+      showResults();
+    }
+  },
+  scene
+);
+
+// HUD (создаём сразу, не зависит от модели)
+window.hud = new HUD();
 
 // Загружаем модель машины
 const startScreen = document.getElementById('start-screen');
@@ -71,6 +87,7 @@ function restartRace() {
   window.state.startTime = Date.now();
   window.lapCounter.reset();
   window.car.reset(track.spawnPos, track.spawnRot);
+  window.botManager.reset();
   window.state.isPlaying = true;
 }
 
@@ -96,38 +113,34 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
     document.getElementById('loading-bar').style.display = 'none';
   }, 800);
 
-  // Создаём машину
+  // Создаём машину игрока (колёса встроены в GLTF модель)
   const carMesh = createCarMesh();
+  
+  // Перекрашиваем машину игрока в синий цвет с белой кабиной
+  recolorCarModel(carMesh, 0x2266ff, 0x333333);
+  
   scene.add(carMesh);
 
-  const wheelMeshes = []; // Пустой массив — колеса есть в модели
+  const wheelMeshes = []; // Пустой массив — колёса есть в модели
 
   const { chassisBody, vehicle } = createCarPhysics(world, wheelMat);
   window.car = new CarController(chassisBody, vehicle, carMesh, wheelMeshes);
   window.car.reset(track.spawnPos, track.spawnRot);
 
-  // Система отслеживания кругов
-  window.lapCounter = new LapCounter(
-    track.segments,
-    track.spawnPos,
-    (lapNumber) => {
-      console.log(`🏁 Круг ${lapNumber} завершен!`);
-      window.state.lap = lapNumber;
-      
-      // Проверка на конец игры
-      if (lapNumber >= window.state.maxLaps) {
-        showResults();
-      }
-    },
-    scene // Передаём сцену для отрисовки стрелок
-  );
+  // Создаём AI-ботов (случайные позиции на трассе, свои чекпоинты)
+  window.botManager = new BotManager(scene, world, wheelMat, track.segments);
+  window.botManager.spawnBots(5);
+
+  // Создаём систему предметов (как в Revolt!)
+  window.itemSystem = new ItemSystem(scene);
+  // Спавним первые предметы
+  for (let i = 0; i < 4; i++) {
+    window.itemSystem.spawnItem(track.segments);
+  }
 
   // Ввод
   const input = new InputManager();
   input.onUpdate((state) => { window.car.input = state; });
-
-  // HUD
-  window.hud = new HUD();
 
   // Telegram
   initTelegram();
@@ -166,19 +179,49 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && window.state.isPlaying) {
     window.car.flipOver();
   }
-  // Клавиша Shift — нитро
-  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
-    if (window.state.isPlaying && window.car) {
-      window.car.activateNitro();
-    }
-  }
-});
-
-// Клавиши отпускаются
-document.addEventListener('keyup', (e) => {
-  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
-    if (window.car) {
-      window.car.deactivateNitro();
+  // Клавиша Ctrl — использовать предмет
+  if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
+    if (window.state.isPlaying && window.itemSystem && window.car) {
+      const itemType = window.itemSystem.useItem();
+      if (itemType) {
+        const result = window.itemSystem.applyItemEffect(itemType, window.car);
+        console.log(result.message);
+        
+        // Показываем эффект использования предмета
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+          position: fixed;
+          top: 40%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background: rgba(255, 215, 0, 0.9);
+          color: black;
+          padding: 15px 30px;
+          border-radius: 10px;
+          font-size: 28px;
+          font-weight: bold;
+          z-index: 1000;
+          pointer-events: none;
+          animation: popIn 0.5s ease-out;
+        `;
+        notification.textContent = result.message;
+        document.body.appendChild(notification);
+        
+        const style = document.createElement('style');
+        style.textContent = `
+          @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0); }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+          }
+        `;
+        document.head.appendChild(style);
+        
+        setTimeout(() => {
+          notification.remove();
+          style.remove();
+        }, 1500);
+      }
     }
   }
 });
@@ -191,23 +234,6 @@ flipBtn.addEventListener('touchstart', (e) => {
   e.preventDefault();
   if (window.state.isPlaying) window.car.flipOver();
 }, { passive: false });
-
-// Кнопка нитро на экране
-const nitroBtn = document.getElementById('nitro-btn');
-if (nitroBtn) {
-  nitroBtn.addEventListener('touchstart', (e) => {
-    e.preventDefault();
-    if (window.state.isPlaying && window.car) {
-      window.car.activateNitro();
-    }
-  });
-  nitroBtn.addEventListener('touchend', (e) => {
-    e.preventDefault();
-    if (window.car) {
-      window.car.deactivateNitro();
-    }
-  });
-}
 
 // ==================== ПРОВЕРКА СТОЛКНОВЕНИЙ С ПРЕПЯТСТВИЯМИ ====================
 
@@ -251,6 +277,7 @@ startBtn.addEventListener('click', () => {
   window.state.isPlaying = true;
   window.state.startTime = Date.now();
   window.car.reset(track.spawnPos, track.spawnRot);
+  window.botManager.reset();
 });
 
 // Кнопка "Ещё раз"
@@ -276,17 +303,15 @@ function animate() {
 
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  if (window.state.isPlaying) {
+  if (window.state.isPlaying && window.car && window.botManager && window.hud) {
     world.step(1 / 60, dt, CONFIG.physics.substeps);
     window.car.update();
+    window.botManager.update(dt);
     updateCamera();
-    window.hud.update(window.car, window.state, nitroSystem, window.lapCounter);
+    window.hud.update(window.car, window.state, window.lapCounter);
 
     // Обновляем систему частиц
     particleSystem.update(dt);
-
-    // Обновляем систему нитро
-    nitroSystem.update(dt);
 
     // Эффекты выхлопа и дыма при дрифте
     const carSpeed = window.car.speed;
@@ -307,16 +332,6 @@ function animate() {
       particleSystem.emitSmoke(carPos, smokeDir, 3);
     }
 
-    // Эффекты нитро
-    if (window.car.isNitroActive() && nitroSystem.isNitroActive()) {
-      const nitroDir = new THREE.Vector3(0, 0.5, -1);
-      nitroDir.applyQuaternion(window.car.mesh.quaternion);
-      
-      // Частицы нитро из выхлопных труб
-      nitroSystem.emitNitroFlame(carPos, nitroDir);
-      nitroSystem.emitNitroTrail(carPos, nitroDir);
-    }
-
     // Проверка столкновений с препятствиями
     checkObstacleCollisions(window.car.mesh.position);
 
@@ -326,6 +341,13 @@ function animate() {
       
       // Передаём следующую контрольную точку для миникарты
       window.car.mesh.userData.nextCheckpoint = window.lapCounter.getNextCheckpoint();
+    }
+
+    // Обновление системы предметов
+    if (window.itemSystem) {
+      window.itemSystem.update(dt, track.segments);
+      // Проверка сбора предметов
+      window.itemSystem.checkItemCollection(window.car.mesh.position);
     }
 
     // Показываем кнопку переворота, если машина вверх дном

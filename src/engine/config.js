@@ -2,7 +2,7 @@ export const CONFIG = {
   car: {
     maxSpeed: 120,
     engineForce: 800,
-    brakeForce: 100,  // уменьшено с 200 для более плавного торможения
+    brakeForce: 100,
     reverseForce: 800,
     maxSteer: 0.45,
     mass: 150,

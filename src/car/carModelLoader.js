@@ -65,22 +65,58 @@ export function loadCarModel(path, onLoaded, onProgress = null) {
 
 /**
  * Создаёт упрощённую модель (fallback если не загрузилась)
+ * @param {number} color - Цвет машины (hex)
  */
-export function createFallbackCarModel() {
+export function createFallbackCarModel(color = CONFIG.colors.car) {
   const group = new THREE.Group();
 
   const bodyGeo = new THREE.BoxGeometry(2, 0.5, 4);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.car });
+  const bodyMat = new THREE.MeshStandardMaterial({ 
+    color: color,
+    metalness: 0.3,
+    roughness: 0.7
+  });
   const body = new THREE.Mesh(bodyGeo, bodyMat);
   body.castShadow = true;
   group.add(body);
 
   const cabGeo = new THREE.BoxGeometry(1.6, 0.5, 2);
-  const cabMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.cabin });
+  const cabMat = new THREE.MeshStandardMaterial({ 
+    color: CONFIG.colors.cabin,
+    metalness: 0.5,
+    roughness: 0.5
+  });
   const cabin = new THREE.Mesh(cabGeo, cabMat);
   cabin.position.set(0, 0.5, -0.2);
   cabin.castShadow = true;
   group.add(cabin);
 
   return group;
+}
+
+/**
+ * Перекрашивает модель машины в указанный цвет
+ * @param {THREE.Group} model - Модель машины
+ * @param {number} bodyColor - Цвет кузова (hex)
+ * @param {number} cabinColor - Цвет кабины (hex, опционально)
+ */
+export function recolorCarModel(model, bodyColor, cabinColor = null) {
+  model.traverse((child) => {
+    if (child.isMesh && child.material) {
+      // Клонируем материал чтобы не влиять на другие экземпляры
+      child.material = child.material.clone();
+      
+      // Определяем тип материала по имени или текущему цвету
+      const currentColor = child.material.color.getHex();
+      
+      if (cabinColor && currentColor === CONFIG.colors.cabin) {
+        child.material.color.setHex(cabinColor);
+      } else if (bodyColor) {
+        // Красим кузов
+        child.material.color.setHex(bodyColor);
+        child.material.metalness = 0.4;
+        child.material.roughness = 0.6;
+      }
+    }
+  });
 }
