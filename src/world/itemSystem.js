@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { Rocket } from './rocket.js';
+import { Mine } from './mine.js';
 
 /**
  * Система предметов на трассе (как в Revolt!)
@@ -64,95 +66,358 @@ class TrackItem {
   
   _createMesh() {
     const color = itemColors[this.type];
-    let geometry, material, mesh;
-    
+    const group = new THREE.Group();
+
     switch (this.type) {
       case ItemType.ROCKET:
-        // Конус для ракеты
-        geometry = new THREE.ConeGeometry(0.8, 2, 8);
-        material = new THREE.MeshPhongMaterial({ 
-          color: color, 
-          emissive: color,
-          emissiveIntensity: 0.5,
-          transparent: true,
-          opacity: 0.8
-        });
-        mesh = new THREE.Mesh(geometry, material);
-        mesh.rotation.x = Math.PI / 2; // Лежит горизонтально
+        // Детализированная ракета
+        const rocketBody = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.3, 0.4, 2, 12),
+          new THREE.MeshPhongMaterial({
+            color: 0xcc3333,
+            emissive: 0xff2200,
+            emissiveIntensity: 0.4,
+            shininess: 100
+          })
+        );
+        rocketBody.rotation.x = Math.PI / 2;
+        rocketBody.position.y = 0.5;
+        group.add(rocketBody);
+
+        // Нос ракеты
+        const rocketNose = new THREE.Mesh(
+          new THREE.ConeGeometry(0.4, 0.8, 12),
+          new THREE.MeshPhongMaterial({
+            color: 0xff6644,
+            emissive: 0xff4400,
+            emissiveIntensity: 0.5,
+            shininess: 100
+          })
+        );
+        rocketNose.rotation.x = -Math.PI / 2;
+        rocketNose.position.z = -1.4;
+        rocketNose.position.y = 0.5;
+        group.add(rocketNose);
+
+        // Хвостовое оперение
+        for (let i = 0; i < 4; i++) {
+          const fin = new THREE.Mesh(
+            new THREE.BoxGeometry(0.1, 0.5, 0.4),
+            new THREE.MeshPhongMaterial({
+              color: 0xff2222,
+              emissive: 0xff0000,
+              emissiveIntensity: 0.3
+            })
+          );
+          const angle = (i / 4) * Math.PI * 2;
+          fin.position.set(
+            Math.cos(angle) * 0.3,
+            0.5,
+            1.3
+          );
+          fin.rotation.y = angle;
+          group.add(fin);
+        }
+
+        // Огонь в хвосте
+        const rocketFlame = new THREE.Mesh(
+          new THREE.ConeGeometry(0.2, 0.6, 8),
+          new THREE.MeshBasicMaterial({
+            color: 0xffaa00,
+            transparent: true,
+            opacity: 0.8
+          })
+        );
+        rocketFlame.rotation.x = -Math.PI / 2;
+        rocketFlame.position.z = 1.5;
+        rocketFlame.position.y = 0.5;
+        group.add(rocketFlame);
         break;
         
       case ItemType.MINE:
-        // Сфера для мины
-        geometry = new THREE.SphereGeometry(0.8, 8, 8);
-        material = new THREE.MeshPhongMaterial({ 
-          color: color,
-          emissive: color,
-          emissiveIntensity: 0.3
-        });
-        mesh = new THREE.Mesh(geometry, material);
+        // Детализированная мина с шипами
+        const mineCore = new THREE.Mesh(
+          new THREE.SphereGeometry(0.8, 16, 16),
+          new THREE.MeshPhongMaterial({
+            color: 0xff6600,
+            emissive: 0xff4400,
+            emissiveIntensity: 0.3,
+            shininess: 50
+          })
+        );
+        group.add(mineCore);
+
+        // Шипы
+        for (let i = 0; i < 12; i++) {
+          const spike = new THREE.Mesh(
+            new THREE.ConeGeometry(0.12, 0.5, 6),
+            new THREE.MeshPhongMaterial({
+              color: 0xff3300,
+              emissive: 0xff2200,
+              emissiveIntensity: 0.5
+            })
+          );
+          const angle = (i / 12) * Math.PI * 2;
+          spike.position.set(
+            Math.cos(angle) * 0.8,
+            0.3,
+            Math.sin(angle) * 0.8
+          );
+          spike.rotation.x = Math.PI / 4;
+          spike.rotation.z = angle;
+          group.add(spike);
+        }
+
+        // Пульсирующее кольцо
+        const mineRing = new THREE.Mesh(
+          new THREE.TorusGeometry(1.1, 0.08, 8, 24),
+          new THREE.MeshBasicMaterial({
+            color: 0xff8800,
+            transparent: true,
+            opacity: 0.6
+          })
+        );
+        mineRing.rotation.x = Math.PI / 2;
+        mineRing.position.y = 0.3;
+        group.add(mineRing);
+        group.userData.mineRing = mineRing;
         break;
         
       case ItemType.SHIELD:
-        // Икосаэдр for щита
-        geometry = new THREE.IcosahedronGeometry(1, 0);
-        material = new THREE.MeshPhongMaterial({ 
-          color: color,
-          emissive: color,
-          emissiveIntensity: 0.3,
-          transparent: true,
-          opacity: 0.6,
-          wireframe: true
-        });
-        mesh = new THREE.Mesh(geometry, material);
+        // Красивый щит с кольцами
+        const shieldCore = new THREE.Mesh(
+          new THREE.IcosahedronGeometry(0.8, 0),
+          new THREE.MeshPhongMaterial({
+            color: 0x4488ff,
+            emissive: 0x2266ff,
+            emissiveIntensity: 0.4,
+            transparent: true,
+            opacity: 0.7,
+            shininess: 100
+          })
+        );
+        group.add(shieldCore);
+
+        // Внешнее кольцо
+        const shieldOuterRing = new THREE.Mesh(
+          new THREE.TorusGeometry(1.2, 0.1, 8, 32),
+          new THREE.MeshBasicMaterial({
+            color: 0x66aaff,
+            transparent: true,
+            opacity: 0.8
+          })
+        );
+        shieldOuterRing.rotation.x = Math.PI / 2;
+        group.add(shieldOuterRing);
+
+        // Внутреннее кольцо
+        const shieldInnerRing = new THREE.Mesh(
+          new THREE.TorusGeometry(0.9, 0.08, 8, 24),
+          new THREE.MeshBasicMaterial({
+            color: 0x88ccff,
+            transparent: true,
+            opacity: 0.6
+          })
+        );
+        shieldInnerRing.rotation.x = Math.PI / 2;
+        group.add(shieldInnerRing);
+
+        // Частицы вокруг щита
+        for (let i = 0; i < 6; i++) {
+          const particle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1, 8, 8),
+            new THREE.MeshBasicMaterial({
+              color: 0xaaddff,
+              transparent: true,
+              opacity: 0.8
+            })
+          );
+          const angle = (i / 6) * Math.PI * 2;
+          particle.position.set(
+            Math.cos(angle) * 1.4,
+            0,
+            Math.sin(angle) * 1.4
+          );
+          group.add(particle);
+          group.userData.shieldParticles = group.userData.shieldParticles || [];
+          group.userData.shieldParticles.push({ mesh: particle, angle });
+        }
+        break;
+        
+      case ItemType.SUPERBOOST:
+        // Супер-ускорение - большая яркая звезда
+        const superBoostCore = new THREE.Mesh(
+          new THREE.OctahedronGeometry(1.0, 0),
+          new THREE.MeshPhongMaterial({
+            color: 0xffd700,
+            emissive: 0xffaa00,
+            emissiveIntensity: 0.8,
+            transparent: true,
+            opacity: 0.9,
+            shininess: 100
+          })
+        );
+        group.add(superBoostCore);
+
+        // Дополнительные лучи
+        for (let i = 0; i < 8; i++) {
+          const ray = new THREE.Mesh(
+            new THREE.ConeGeometry(0.15, 0.8, 4),
+            new THREE.MeshBasicMaterial({
+              color: 0xffcc00,
+              transparent: true,
+              opacity: 0.7
+            })
+          );
+          const angle = (i / 8) * Math.PI * 2;
+          ray.position.set(
+            Math.cos(angle) * 1.0,
+            0,
+            Math.sin(angle) * 1.0
+          );
+          ray.rotation.x = Math.PI / 2;
+          ray.rotation.z = angle;
+          group.add(ray);
+        }
+
+        // Внешнее свечение
+        const superBoostGlow = new THREE.Mesh(
+          new THREE.SphereGeometry(1.3, 16, 16),
+          new THREE.MeshBasicMaterial({
+            color: 0xffaa00,
+            transparent: true,
+            opacity: 0.2
+          })
+        );
+        group.add(superBoostGlow);
         break;
         
       case ItemType.BOOST:
-      case ItemType.SUPERBOOST:
-        // Звезда для ускорения
-        geometry = new THREE.OctahedronGeometry(0.8, 0);
-        material = new THREE.MeshPhongMaterial({ 
-          color: color,
-          emissive: color,
-          emissiveIntensity: 0.5,
-          transparent: true,
-          opacity: 0.8
-        });
-        mesh = new THREE.Mesh(geometry, material);
+        // Обычное ускорение - звезда
+        const boostCore = new THREE.Mesh(
+          new THREE.OctahedronGeometry(0.7, 0),
+          new THREE.MeshPhongMaterial({
+            color: 0x44ff44,
+            emissive: 0x22cc22,
+            emissiveIntensity: 0.5,
+            transparent: true,
+            opacity: 0.8,
+            shininess: 100
+          })
+        );
+        group.add(boostCore);
+
+        // Лучи
+        for (let i = 0; i < 6; i++) {
+          const ray = new THREE.Mesh(
+            new THREE.ConeGeometry(0.1, 0.5, 4),
+            new THREE.MeshBasicMaterial({
+              color: 0x66ff66,
+              transparent: true,
+              opacity: 0.6
+            })
+          );
+          const angle = (i / 6) * Math.PI * 2;
+          ray.position.set(
+            Math.cos(angle) * 0.7,
+            0,
+            Math.sin(angle) * 0.7
+          );
+          ray.rotation.x = Math.PI / 2;
+          ray.rotation.z = angle;
+          group.add(ray);
+        }
         break;
-        
+
       case ItemType.OIL:
-        // Плоский цилиндр для масла
-        geometry = new THREE.CylinderGeometry(1, 1, 0.1, 12);
-        material = new THREE.MeshPhongMaterial({ 
-          color: color,
-          transparent: true,
-          opacity: 0.7
-        });
-        mesh = new THREE.Mesh(geometry, material);
+        // Масляное пятно - лужа с блеском
+        const oilBase = new THREE.Mesh(
+          new THREE.CylinderGeometry(1.5, 1.8, 0.08, 24),
+          new THREE.MeshPhongMaterial({
+            color: 0x222222,
+            emissive: 0x111111,
+            emissiveIntensity: 0.1,
+            transparent: true,
+            opacity: 0.85,
+            shininess: 150
+          })
+        );
+        group.add(oilBase);
+
+        // Блестящие капли
+        for (let i = 0; i < 8; i++) {
+          const droplet = new THREE.Mesh(
+            new THREE.CircleGeometry(0.15 + Math.random() * 0.1, 8),
+            new THREE.MeshBasicMaterial({
+              color: 0x444444,
+              transparent: true,
+              opacity: 0.6
+            })
+          );
+          const angle = Math.random() * Math.PI * 2;
+          const dist = Math.random() * 1.2;
+          droplet.position.set(
+            Math.cos(angle) * dist,
+            0.05,
+            Math.sin(angle) * dist
+          );
+          droplet.rotation.x = -Math.PI / 2;
+          group.add(droplet);
+        }
         break;
-        
+
       default:
-        geometry = new THREE.BoxGeometry(1, 1, 1);
-        material = new THREE.MeshPhongMaterial({ color: color });
-        mesh = new THREE.Mesh(geometry, material);
+        // Заглушка
+        const defaultMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(1, 1, 1),
+          new THREE.MeshPhongMaterial({ color: color })
+        );
+        group.add(defaultMesh);
     }
-    
-    mesh.position.copy(this.position);
-    mesh.position.y += 0.5; // Лежит на земле (чуть выше поверхности)
-    
-    // Добавляем свечение (точечный свет)
-    const light = new THREE.PointLight(color, 0.3, 6);
-    light.position.copy(this.position);
-    light.position.y += 1;
+
+    group.position.copy(this.position);
+    group.position.y += 0.5;
+
+    // Добавляем свечение
+    const light = new THREE.PointLight(color, 0.4, 8);
+    light.position.copy(group.position);
+    light.position.y += 0.5;
     this.scene.add(light);
-    mesh.userData.light = light;
-    
-    return mesh;
+    group.userData.light = light;
+
+    return group;
   }
   
   update(dt) {
-    if (this.collected) return;
-    
+    if (this.collected) {
+      // Анимация исчезновения при сборе
+      this.collectAnimTime = (this.collectAnimTime || 0) + dt;
+      const progress = this.collectAnimTime / 0.3; // 0.3 секунды на исчезновение
+
+      if (progress >= 1) {
+        this.destroy();
+        return true; // Нужно удалить из массива
+      }
+
+      // Масштаб уменьшается
+      const scale = 1 - progress;
+      this.mesh.scale.set(scale, scale, scale);
+      // Поворот ускоряется
+      this.mesh.rotation.y += dt * 10;
+      // Прозрачность
+      this.mesh.traverse((child) => {
+        if (child.material) {
+          child.material.opacity = (child.material.opacity || 1) * (1 - progress);
+          child.material.transparent = true;
+        }
+      });
+      // Свет гаснет
+      if (this.mesh.userData.light) {
+        this.mesh.userData.light.intensity = 0.4 * (1 - progress);
+      }
+      return false;
+    }
+
     // Вращение предмета
     this.mesh.rotation.y += dt * 2;
     this.mesh.rotation.z = Math.sin(Date.now() * 0.003) * 0.2;
@@ -163,9 +428,24 @@ class TrackItem {
     
     // Свет тоже пульсирует
     if (this.mesh.userData.light) {
-      this.mesh.userData.light.intensity = 0.3 + Math.sin(Date.now() * 0.005) * 0.2;
+      this.mesh.userData.light.intensity = 0.4 + Math.sin(Date.now() * 0.005) * 0.2;
     }
     
+    // Дополнительная анимация для особых предметов
+    if (this.type === ItemType.MINE && this.mesh.userData.mineRing) {
+      this.mesh.userData.mineRing.rotation.z += dt * 3;
+      this.mesh.userData.mineRing.scale.setScalar(1 + Math.sin(Date.now() * 0.008) * 0.1);
+    }
+
+    if (this.type === ItemType.SHIELD && this.mesh.userData.shieldParticles) {
+      for (const p of this.mesh.userData.shieldParticles) {
+        p.angle += dt * 2;
+        p.mesh.position.x = Math.cos(p.angle) * 1.4;
+        p.mesh.position.z = Math.sin(p.angle) * 1.4;
+        p.mesh.position.y = Math.sin(Date.now() * 0.005 + p.angle) * 0.3;
+      }
+    }
+
     // Предметы исчезают через 30 секунд
     if (Date.now() - this.time > 30000) {
       this.destroy();
@@ -175,17 +455,36 @@ class TrackItem {
   }
   
   destroy() {
-    this.scene.remove(this.mesh);
+    // Удаляем свет
     if (this.mesh.userData.light) {
       this.scene.remove(this.mesh.userData.light);
+      this.mesh.userData.light = null;
     }
+
+    // Удаляем все части группы и их материалы
+    this.mesh.traverse((child) => {
+      if (child.geometry) {
+        child.geometry.dispose();
+      }
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(m => m.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+    });
+
+    // Удаляем саму группу из сцены
+    this.scene.remove(this.mesh);
   }
   
-  checkCollection(playerPos, threshold = 3) {
+  checkCollection(playerPos, threshold = 4.5) {
     if (this.collected) return false;
     const dist = playerPos.distanceTo(this.position);
     if (dist < threshold) {
       this.collected = true;
+      this.collectAnimTime = 0; // Начинаем анимацию исчезновения
       return true;
     }
     return false;
@@ -205,11 +504,17 @@ export class ItemSystem {
     this.maxPlayerItems = 2; // Максимум 2 предмета у игрока
     
     // Спавн предметов на трассе
-    this.spawnInterval = 8000; // Каждые 8 секунд
+    this.spawnInterval = 5000; // Каждые 5 секунд
     this.lastSpawnTime = 0;
-    this.maxTrackItems = 6; // Максимум 6 предметов на трассе
+    this.maxTrackItems = 12; // Максимум 12 предметов на трассе
+    
+    // Активные ракеты
+    this.activeRockets = [];
+
+    // Активные мины
+    this.activeMines = [];
   }
-  
+
   /**
    * Спавн случайного предмета в случайной позиции
    */
@@ -230,8 +535,8 @@ export class ItemSystem {
     
     // Случайный тип предмета
     const types = Object.values(ItemType);
-    // Более редкие предметы
-    const weights = [25, 20, 15, 20, 10, 10]; // rocket, mine, shield, boost, oil, superboost
+    // Ракеты чаще, остальные равномерно
+    const weights = [35, 15, 15, 20, 5, 10]; // rocket, mine, shield, boost, oil, superboost
     const type = this._weightedRandom(types, weights);
     
     const item = new TrackItem(type, pos, this.scene);
@@ -259,10 +564,10 @@ export class ItemSystem {
   checkItemCollection(playerPos) {
     for (let i = this.trackItems.length - 1; i >= 0; i--) {
       const item = this.trackItems[i];
-      if (item.checkCollection(playerPos)) {
+      if (!item.collected && item.checkCollection(playerPos)) {
         // Игрок собрал предмет!
         this._collectItem(item);
-        this.trackItems.splice(i, 1);
+        // НЕ удаляем из массива сразу - анимация исчезновения будет в update()
       }
     }
   }
@@ -285,44 +590,17 @@ export class ItemSystem {
   }
   
   _showCollectNotification(type) {
-    // Создаём временное уведомление
     const notification = document.createElement('div');
-    notification.style.cssText = `
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.8);
-      color: white;
-      padding: 15px 25px;
-      border-radius: 10px;
-      font-size: 24px;
-      font-weight: bold;
-      z-index: 1000;
-      pointer-events: none;
-      animation: fadeInOut 1.5s ease-out;
-      border: 2px solid #${itemColors[type].toString(16).padStart(6, '0')};
-    `;
+    notification.className = 'item-toast';
+    const colorHex = '#' + itemColors[type].toString(16).padStart(6, '0');
+    notification.style.borderColor = colorHex;
+    notification.style.boxShadow = `0 0 20px ${colorHex}40`;
     notification.textContent = itemIcons[type] + ' ' + itemNames[type];
     document.body.appendChild(notification);
-    
-    // Добавляем анимацию
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes fadeInOut {
-        0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
-        20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-        30% { transform: translate(-50%, -50%) scale(1); }
-        80% { opacity: 1; }
-        100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-      }
-    `;
-    document.head.appendChild(style);
-    
+
     setTimeout(() => {
       notification.remove();
-      style.remove();
-    }, 1500);
+    }, 1200);
   }
   
   /**
@@ -370,50 +648,45 @@ export class ItemSystem {
       }
     }
     
+    // Обновление активных ракет
+    for (let i = this.activeRockets.length - 1; i >= 0; i--) {
+      const rocket = this.activeRockets[i];
+      rocket.update(dt);
+      if (!rocket.alive) {
+        this.activeRockets.splice(i, 1);
+      }
+    }
+    
+    // Обновление активных мин
+    for (let i = this.activeMines.length - 1; i >= 0; i--) {
+      const mine = this.activeMines[i];
+      const shouldRemove = mine.update(dt);
+      if (shouldRemove) {
+        this.activeMines.splice(i, 1);
+      }
+    }
+    
     // Проверяем готовность предметов
-    const readyItem = this.playerItems.find(item => 
-      !item.ready && now - item.time >= this.itemCooldown
-    );
-    if (readyItem) {
-      readyItem.ready = true;
-      this._showItemReadyNotification(readyItem.type);
+    for (const item of this.playerItems) {
+      if (!item.ready && now - item.time >= this.itemCooldown) {
+        item.ready = true;
+        this._showItemReadyNotification(item.type);
+      }
     }
   }
   
   _showItemReadyNotification(type) {
     const notification = document.createElement('div');
-    notification.style.cssText = `
-      position: fixed;
-      bottom: 150px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0, 255, 0, 0.3);
-      color: white;
-      padding: 8px 16px;
-      border-radius: 5px;
-      font-size: 14px;
-      z-index: 1000;
-      pointer-events: none;
-      animation: slideUp 2s ease-out;
-    `;
+    notification.className = 'item-toast';
+    const colorHex = '#' + itemColors[type].toString(16).padStart(6, '0');
+    notification.style.borderColor = colorHex;
+    notification.style.boxShadow = `0 0 20px ${colorHex}40`;
     notification.textContent = itemIcons[type] + ' ' + itemNames[type] + ' готов! Нажми Ctrl';
     document.body.appendChild(notification);
-    
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes slideUp {
-        0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
-        20% { opacity: 1; transform: translateX(-50%) translateY(0); }
-        80% { opacity: 1; }
-        100% { opacity: 0; }
-      }
-    `;
-    document.head.appendChild(style);
-    
+
     setTimeout(() => {
       notification.remove();
-      style.remove();
-    }, 2000);
+    }, 1200);
   }
   
   /**
@@ -453,29 +726,66 @@ export class ItemSystem {
       case ItemType.BOOST:
         // Временное ускорение
         car.applyBoost(1.5, 3000);
+        // Визуальный эффект
+        if (window.createItemEffect) {
+          window.createItemEffect('boost', car.mesh);
+        }
         return { success: true, message: 'Ускорение!' };
         
       case ItemType.SUPERBOOST:
         // Супер ускорение
         car.applyBoost(2.5, 2000);
+        // Визуальный эффект
+        if (window.createItemEffect) {
+          window.createItemEffect('superboost', car.mesh);
+        }
         return { success: true, message: 'СУПЕР УСКОРЕНИЕ!' };
         
       case ItemType.SHIELD:
         // Щит на время
         car.hasShield = true;
         car.shieldTime = Date.now();
+        // Визуальный эффект
+        if (window.createItemEffect) {
+          window.createItemEffect('shield', car.mesh);
+        }
         return { success: true, message: 'Щит активирован!' };
         
       case ItemType.ROCKET:
-        // Ракета впереди (визуальный эффект)
-        return { success: true, message: 'Ракета выпущена!' };
+        // Создаем ракету
+        if (window.car && window.botManager) {
+          const rocket = new Rocket(window.car.mesh, this.scene, window.botManager);
+          this.activeRockets.push(rocket);
+          // Визуальный эффект
+          if (window.createItemEffect) {
+            window.createItemEffect('rocket', car.mesh);
+          }
+          return { success: true, message: 'Ракета выпущена!' };
+        }
+        return { success: false, message: 'Ошибка запуска ракеты!' };
         
       case ItemType.MINE:
-        // Мина позади
+        // Мина позади машины
+        const backward = new THREE.Vector3(0, 0, 1);
+        backward.applyQuaternion(car.mesh.quaternion);
+        const minePos = car.mesh.position.clone().add(backward.multiplyScalar(3));
+        minePos.y = 0;
+
+        const mine = new Mine(minePos, this.scene);
+        this.activeMines.push(mine);
+
+        // Визуальный эффект
+        if (window.createItemEffect) {
+          window.createItemEffect('mine', car.mesh);
+        }
         return { success: true, message: 'Мина установлена!' };
         
       case ItemType.OIL:
         // Масляное пятно
+        // Визуальный эффект
+        if (window.createItemEffect) {
+          window.createItemEffect('oil', car.mesh);
+        }
         return { success: true, message: 'Масло разлито!' };
         
       default:
@@ -488,5 +798,27 @@ export class ItemSystem {
     this.trackItems = [];
     this.playerItems = [];
     this.activeItem = null;
+    
+    // Удаляем все активные ракеты
+    this.activeRockets.forEach(rocket => rocket.destroy());
+    this.activeRockets = [];
+
+    // Удаляем все активные мины
+    this.activeMines.forEach(mine => mine.destroy());
+    this.activeMines = [];
+  }
+
+  /**
+   * Проверка столкновений с минами
+   */
+  checkMineCollisions(carPos, onHit = null) {
+    for (let i = this.activeMines.length - 1; i >= 0; i--) {
+      const mine = this.activeMines[i];
+      if (mine.checkCollision(carPos)) {
+        mine.explode();
+        this.activeMines.splice(i, 1);
+        if (onHit) onHit();
+      }
+    }
   }
 }

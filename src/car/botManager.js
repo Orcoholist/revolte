@@ -39,7 +39,6 @@ export class BotManager {
   _createCheckpoints(count) {
     if (!this.trackSegments || this.trackSegments.length === 0) {
       console.error('trackSegments пуст! Боты не будут работать.');
-      console.log('trackSegments:', this.trackSegments);
       return [];
     }
     const cps = [];
@@ -48,9 +47,7 @@ export class BotManager {
       const idx = (i * step) % this.trackSegments.length;
       const cp = this.trackSegments[idx].clone();
       cps.push(cp);
-      console.log('Checkpoint ' + i + ': (' + cp.x.toFixed(0) + ', ' + cp.z.toFixed(0) + ')');
     }
-    console.log('Created ' + cps.length + ' checkpoints for bots');
     return cps;
   }
 
@@ -70,7 +67,7 @@ export class BotManager {
     for (let i = 0; i < count; i++) {
       this._createBot(i);
     }
-    console.log('Created ' + count + ' bots with UNIQUE routes');
+    // console.log('Created ' + count + ' bots with UNIQUE routes');
   }
 
   _createBot(index) {
@@ -81,7 +78,7 @@ export class BotManager {
     recolorCarModel(carMesh, botColor, 0x222222);
     this.scene.add(carMesh);
     
-    console.log('Bot ' + index + ': color 0x' + botColor.toString(16).padStart(6, '0'));
+    // console.log('Bot ' + index + ': color 0x' + botColor.toString(16).padStart(6, '0'));
 
     const wheelMeshes = createWheelMeshes();
     wheelMeshes.forEach(w => this.scene.add(w));
@@ -112,12 +109,12 @@ export class BotManager {
     chassisBody.quaternion.setFromEuler(0, rotY, 0);
 
     // AI контроллер с УНИКАЛЬНЫМ маршрутом
-    const startCp = Math.floor(Math.random() * this.checkpoints.length);
+    const startCp = 0; // Уникальный маршрут уже начинается с нужной точки
     
     // Создаём уникальный маршрут для каждого бота
     const uniqueRoute = this._createBotRoute(index);
     
-    console.log('Bot ' + index + ': spawn (' + startPos.x.toFixed(1) + ', ' + startPos.y.toFixed(1) + ', ' + startPos.z.toFixed(1) + '), target checkpoint ' + startCp);
+    // console.log('Bot ' + index + ': spawn (' + startPos.x.toFixed(1) + ', ' + startPos.y.toFixed(1) + ', ' + startPos.z.toFixed(1) + '), target checkpoint ' + startCp);
     const bot = new BotController(
       chassisBody,
       vehicle,
@@ -132,41 +129,36 @@ export class BotManager {
   }
 
   /**
-   * Создаёт УНИКАЛЬНЫЙ хаотичный маршрут для каждого бота!
-   * Каждый бот получает случайные чекпоинты из общего набора
+   * Создаёт УНИКАЛЬНЫЙ маршрут для каждого бота!
+   * Бот следует по последовательным чекпоинтам трассы, но с случайным смещением по полосе
+   * и случайным начальным индексом, чтобы боты были распределены по трассе.
    */
   _createBotRoute(botIndex) {
     const uniqueRoute = [];
     const numPoints = this.checkpoints.length;
     
-    // Генерируем случайные индексы для хаотичного маршрута
-    const indices = [];
-    const seed = botIndex * 7 + 13; // Разное зерно для каждого бота
+    // Начальное смещение для каждого бота (чтобы боты начинались в разных местах трассы)
+    const startOffset = (botIndex * 5) % numPoints;
     
-    for (let i = 0; i < numPoints; i++) {
-      // Псевдослучайный индекс с разным шагом для каждого бота
-      const step = 3 + (botIndex * 2) % 7; // Шаг 3-9 между точками
-      const idx = (i * step + seed) % numPoints;
-      indices.push(idx);
-    }
+    // Предпочтение полосы для каждого бота (-1: левая, 0: центр, 1: правая)
+    const lanePreference = (botIndex % 3) - 1;
+    const laneOffset = lanePreference * 2.5;
     
-    // Создаём маршрут с хаотичными точками
+    // Создаём маршрут, последовательно проходя все чекпоинты, начиная со startOffset
     for (let i = 0; i < numPoints; i++) {
-      const baseCp = this.checkpoints[indices[i]];
+      const cpIndex = (startOffset + i) % numPoints;
+      const baseCp = this.checkpoints[cpIndex];
       
-      // Каждый бот имеет своё предпочтение полосы
-      const lanePreference = (botIndex % 3) - 1;
-      const laneOffset = lanePreference * 2.0;
+      // Небольшое случайное смещение для естественного поведения
+      const randomOffset = Math.sin(i * 0.5 + botIndex * 1.7) * 1.0;
       
-      // Случайное смещение для хаотичности
-      const randomOffset = Math.sin(i * 0.7 + botIndex * 2.3) * 1.5;
-      
-      // Вычисляем направление трассы
-      const nextIdx = indices[(i + 1) % numPoints];
-      const nextCp = this.checkpoints[nextIdx];
+      // Вычисляем направление к следующей точке для определения перпендикуляра
+      const nextCpIndex = (cpIndex + 1) % numPoints;
+      const nextCp = this.checkpoints[nextCpIndex];
       const dir = new THREE.Vector3().subVectors(nextCp, baseCp).normalize();
       const perp = new THREE.Vector3(-dir.z, 0, dir.x);
       
+      // Точка маршрута с смещением по полосе
       uniqueRoute.push(new THREE.Vector3(
         baseCp.x + perp.x * (laneOffset + randomOffset),
         baseCp.y,
@@ -174,7 +166,7 @@ export class BotManager {
       ));
     }
     
-    console.log('Bot ' + botIndex + ': created CHAOTIC route with ' + uniqueRoute.length + ' points');
+    // console.log('Bot ' + botIndex + ': created sequential route with ' + uniqueRoute.length + ' points, start offset=' + startOffset);
     return uniqueRoute;
   }
 

@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+﻿import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { CONFIG } from '../engine/config.js';
 
@@ -44,6 +44,12 @@ export class BotController {
     const pos = this.chassisBody.position;
     const cfg = CONFIG.car;
 
+    // Защита от пустых чекпоинтов
+    if (!this.checkpoints || this.checkpoints.length === 0) {
+      console.warn(`Bot ${this.botIndex}: нет чекпоинтов!`);
+      return;
+    }
+
     // --- 1. Цель — ТЕКУЩИЙ чекпоинт (к которому едем) ---
     const target = this.checkpoints[this.currentCheckpoint];
 
@@ -51,9 +57,9 @@ export class BotController {
     // Считаем расстояние только по X и Z (игнорируем Y - боты едут по трассе)
     const distToCp = Math.sqrt((target.x - pos.x) ** 2 + (target.z - pos.z) ** 2);
 
-    // Увеличенный порог для надёжного срабатывания
-    const dynamicThreshold = 15 + (this.speed / 10);
-    if (distToCp < dynamicThreshold) {
+    // Фиксированный порог для надёжного срабатывания (не зависит от скорости)
+    const checkpointThreshold = 20;
+    if (distToCp < checkpointThreshold) {
       this.currentCheckpoint++;
       if (this.currentCheckpoint >= this.checkpoints.length) {
         this.currentCheckpoint = 0;
@@ -101,16 +107,18 @@ export class BotController {
     const verySharpTurn = Math.abs(angle) > 1.5;
     
     if (verySharpTurn) {
-      // Очень резкий поворот — минимальное снижение (боты всё равно быстрые)
-      const gasFactor = 0.6;
+      // Очень резкий поворот — небольшое снижение (боты всё равно быстрые)
+      const gasFactor = 0.8;
       this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 2);
       this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 3);
-      // Минимальное торможение для контроля
-      this.vehicle.setBrake(cfg.brakeForce * 0.3, 2);
-      this.vehicle.setBrake(cfg.brakeForce * 0.3, 3);
+      // НЕ тормозим - только газ!
+      this.vehicle.setBrake(0, 0);
+      this.vehicle.setBrake(0, 1);
+      this.vehicle.setBrake(0, 2);
+      this.vehicle.setBrake(0, 3);
     } else if (sharpTurn) {
       // Резкий поворот — небольшое снижение
-      const gasFactor = 0.85;
+      const gasFactor = 0.9;
       this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 2);
       this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 3);
       this.vehicle.setBrake(0, 0);
@@ -135,28 +143,40 @@ export class BotController {
     const moveDistance = posDelta.length();
     this.lastPos.copy(pos);
 
-    if (moveDistance < 0.5 && this.speed < 5) {
+    // Улучшенная проверка застревания: если бот почти не двигается и скорость низкая
+    if (moveDistance < 1.0 && this.speed < 10) {
       // Бот застрял — пробуем выехать
       this.stuckTimer += dt;
-      if (this.stuckTimer > 1.5) {
-        // Разворот на месте
-        this.vehicle.setSteeringValue(cfg.maxSteer * Math.sign(angle), 0);
-        this.vehicle.setSteeringValue(cfg.maxSteer * Math.sign(angle), 1);
-        this.vehicle.applyEngineForce(-cfg.reverseForce * 0.5, 2);
-        this.vehicle.applyEngineForce(-cfg.reverseForce * 0.5, 3);
+      if (this.stuckTimer > 1.0) {
+        // Пытаемся дать газ вперед и назад
+        if (Math.random() > 0.5) {
+          // Вперед
+          this.vehicle.applyEngineForce(cfg.engineForce * this.aggression, 2);
+          this.vehicle.applyEngineForce(cfg.engineForce * this.aggression, 3);
+          this.vehicle.setBrake(0, 0);
+          this.vehicle.setBrake(0, 1);
+          this.vehicle.setBrake(0, 2);
+          this.vehicle.setBrake(0, 3);
+        } else {
+          // Назад
+          this.vehicle.applyEngineForce(-cfg.reverseForce * 0.8, 2);
+          this.vehicle.applyEngineForce(-cfg.reverseForce * 0.8, 3);
+        }
         
-        if (this.stuckTimer > 3.0) {
-          // Полная остановка и рандомный толчок
-          this.vehicle.applyEngineForce(0, 2);
-          this.vehicle.applyEngineForce(0, 3);
+        if (this.stuckTimer > 2.5) {
+          // СИЛЬНЫЙ толчок в направлении движения + случайный поворот
+          const forward = new THREE.Vector3(0, 0, -1);
+          forward.applyQuaternion(this.mesh.quaternion);
+          // Импульс вперед
           this.chassisBody.applyImpulse(
             new CANNON.Vec3(
-              (Math.random() - 0.5) * 100,
+              forward.x * 200 + (Math.random() - 0.5) * 50,
               0,
-              (Math.random() - 0.5) * 100
+              forward.z * 200 + (Math.random() - 0.5) * 50
             ),
             this.chassisBody.position
           );
+          // Сброс таймера
           this.stuckTimer = 0;
         }
       }
@@ -218,6 +238,20 @@ export class BotController {
     angVel.set(0, 0, 0);
     const euler = new THREE.Euler().setFromQuaternion(this.mesh.quaternion, 'YXZ');
     this.chassisBody.quaternion.setFromEuler(0, euler.y, 0);
+    // После переворота даем небольшой импульс вперед, чтобы бот не застрял
+    const forward = new THREE.Vector3(0, 0, -1);
+    forward.applyQuaternion(this.mesh.quaternion);
+    this.chassisBody.applyImpulse(
+      new CANNON.Vec3(forward.x * 100, 0, forward.z * 100),
+      this.chassisBody.position
+    );
+  }
+
+  /**
+   * Публичный метод переворота (вызывается извне, например ракетой).
+   */
+  flipOver() {
+    this._flipOver();
   }
 
   reset(pos, rotY = 0, startCheckpoint = 0) {
@@ -238,3 +272,6 @@ export class BotController {
     );
   }
 }
+
+
+

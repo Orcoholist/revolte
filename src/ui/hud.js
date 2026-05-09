@@ -11,6 +11,10 @@ export class HUD {
     this.elBest = document.getElementById('best');
     this.elCheckpointDist = document.getElementById('checkpoint-distance');
 
+    // Индикатор предмета
+    this.elItemIcon = document.getElementById('item-icon');
+    this.elItemName = document.getElementById('item-name');
+
     // Миникарта
     this.canvas = document.getElementById('minimap');
     this.ctx = this.canvas.getContext('2d');
@@ -53,6 +57,24 @@ export class HUD {
     }
 
     this._drawMinimap(carController);
+
+    // Обновление индикатора предмета
+    if (window.itemSystem) {
+      const current = window.itemSystem.getCurrentItem();
+      if (current) {
+        this.elItemIcon.textContent = current.icon;
+        if (current.cooldown) {
+          this.elItemName.textContent = `${current.name} (${current.cooldown.toFixed(1)}с)`;
+        } else {
+          this.elItemName.textContent = current.name;
+        }
+        this.elItemIcon.style.display = 'block';
+        this.elItemName.style.display = 'block';
+      } else {
+        this.elItemIcon.style.display = 'none';
+        this.elItemName.style.display = 'none';
+      }
+    }
   }
 
   _drawMinimap(car) {

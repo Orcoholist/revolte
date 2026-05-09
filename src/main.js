@@ -13,6 +13,7 @@ import { HUD } from './ui/hud.js';
 import { initTelegram } from './ui/telegram.js';
 import { LapCounter } from './world/lapCounter.js';
 import { ItemSystem } from './world/itemSystem.js';
+import { EffectsPool } from './world/effectsPool.js';
 
 // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
@@ -88,6 +89,15 @@ function restartRace() {
   window.lapCounter.reset();
   window.car.reset(track.spawnPos, track.spawnRot);
   window.botManager.reset();
+  if (window.itemSystem) {
+    window.itemSystem.clear();
+    for (let i = 0; i < window.itemSystem.maxTrackItems; i++) {
+      window.itemSystem.spawnItem(track.segments);
+    }
+  }
+  if (window.effectsPool) {
+    window.effectsPool.clear();
+  }
   window.state.isPlaying = true;
 }
 
@@ -99,6 +109,12 @@ function returnToMenu() {
   loadingText.style.display = 'none';
   loadingProgress.style.width = '100%';
   window.state.isPlaying = false;
+  if (window.itemSystem) {
+    window.itemSystem.clear();
+  }
+  if (window.effectsPool) {
+    window.effectsPool.clear();
+  }
 }
 
 preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
@@ -133,8 +149,10 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
 
   // Создаём систему предметов (как в Revolt!)
   window.itemSystem = new ItemSystem(scene);
-  // Спавним первые предметы
-  for (let i = 0; i < 4; i++) {
+  // Создаём пул эффектов для оптимизации
+  window.effectsPool = new EffectsPool(scene);
+  // Спавним первые предметы (случайные типы и позиции)
+  for (let i = 0; i < window.itemSystem.maxTrackItems; i++) {
     window.itemSystem.spawnItem(track.segments);
   }
 
@@ -144,6 +162,155 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
 
   // Telegram
   initTelegram();
+
+  // ==================== ВИЗУАЛЬНЫЕ ЭФФЕКТЫ ПРИ ИСПОЛЬЗОВАНИИ ПРЕДМЕТОВ ====================
+
+  // ==================== ОПРЕДЕЛЕНИЕ МОБИЛЬНОГО УСТРОЙСТВА ====================
+  function createItemEffect(itemType, carMesh) {
+    if (!window.particleSystem || !window.effectsPool) return;
+
+    const position = carMesh.position.clone();
+    position.y += 1;
+    
+    switch (itemType) {
+      case 'boost':
+        // Эффект ускорения - светящиеся частицы
+        for (let i = 0; i < 20; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const distance = 0.5 + Math.random() * 0.5;
+          const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+          window.particleSystem.emitExhaust(
+            position.clone().add(dir.multiplyScalar(distance)),
+            dir,
+            0.5 + Math.random() * 0.5
+          );
+        }
+        break;
+        
+      case 'superboost':
+        // Мощный эффект ускорения
+        for (let i = 0; i < 50; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const distance = 0.5 + Math.random() * 1.0;
+          const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+          window.particleSystem.emitExhaust(
+            position.clone().add(dir.multiplyScalar(distance)),
+            dir,
+            1.0 + Math.random() * 1.0
+          );
+        }
+        // Вспышка через пул эффектов
+        window.effectsPool.createFlash(position, 0xffff00, 0.2, 1.5);
+        break;
+        
+      case 'shield':
+        // Эффект щита - светящееся кольцо
+        window.effectsPool.createRing(position, 0x00ffff, 1.0);
+        break;
+        
+      case 'rocket':
+        // Эффект ракеты - вспышка через пул эффектов
+        window.effectsPool.createFlash(position, 0xff4400, 0.3, 2);
+        break;
+        
+      case 'mine':
+        // Эффект мины - вспышка через пул эффектов
+        window.effectsPool.createFlash(position, 0xff8800, 0.5, 1.2);
+        break;
+        
+      case 'oil':
+        // Эффект масла - облако частиц
+        for (let i = 0; i < 25; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+          window.particleSystem.emitSmoke(
+            position.clone(),
+            dir,
+            5
+          );
+        }
+        break;
+    }
+  }
+
+  // ==================== ОПРЕДЕЛЕНИЕ МОБИЛЬНОГО УСТРОЙСТВА ====================
+  function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  }
+
+  // Показать мобильные контролы, если это мобильное устройство
+  const mobileControls = document.getElementById('mobile-controls');
+  const controlsHint = document.getElementById('controls-hint');
+
+  if (isMobileDevice()) {
+    // Показываем мобильные контролы
+    mobileControls.style.display = 'block';
+    // Скрываем десктопные подсказки
+    controlsHint.style.display = 'none';
+    
+    // Добавляем обработчики для мобильных кнопок
+    const btnLeft = document.getElementById('btn-left');
+    const btnRight = document.getElementById('btn-right');
+    const btnGas = document.getElementById('btn-gas');
+    const btnBrake = document.getElementById('btn-brake');
+    
+    // Обработчики поворота
+    btnLeft.addEventListener('touchstart', () => {
+      window.car.input.left = true;
+      btnLeft.classList.add('active');
+    }, { passive: false });
+    
+    btnLeft.addEventListener('touchend', () => {
+      window.car.input.left = false;
+      btnLeft.classList.remove('active');
+    }, { passive: false });
+    
+    btnRight.addEventListener('touchstart', () => {
+      window.car.input.right = true;
+      btnRight.classList.add('active');
+    }, { passive: false });
+    
+    btnRight.addEventListener('touchend', () => {
+      window.car.input.right = false;
+      btnRight.classList.remove('active');
+    }, { passive: false });
+    
+    // Обработчики газа и тормоза
+    btnGas.addEventListener('touchstart', () => {
+      window.car.input.accelerate = true;
+      btnGas.classList.add('active');
+    }, { passive: false });
+    
+    btnGas.addEventListener('touchend', () => {
+      window.car.input.accelerate = false;
+      btnGas.classList.remove('active');
+    }, { passive: false });
+    
+    btnBrake.addEventListener('touchstart', () => {
+      window.car.input.brake = true;
+      btnBrake.classList.add('active');
+    }, { passive: false });
+    
+    btnBrake.addEventListener('touchend', () => {
+      window.car.input.brake = false;
+      btnBrake.classList.remove('active');
+    }, { passive: false });
+    
+    // Убедимся, что кнопка переворота отображается
+    flipBtn.style.display = 'block';
+  } else {
+    // На десктопе скрываем мобильные контролы
+    mobileControls.style.display = 'none';
+  }
+
+  // Добавляем обработчики для кнопки переворота
+  flipBtn.addEventListener('click', () => {
+    if (window.state.isPlaying) window.car.flipOver();
+  });
+  flipBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (window.state.isPlaying) window.car.flipOver();
+  }, { passive: false });
 });
 
 // ==================== КАМЕРА ====================
@@ -186,41 +353,7 @@ document.addEventListener('keydown', (e) => {
       if (itemType) {
         const result = window.itemSystem.applyItemEffect(itemType, window.car);
         console.log(result.message);
-        
-        // Показываем эффект использования предмета
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-          position: fixed;
-          top: 40%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          background: rgba(255, 215, 0, 0.9);
-          color: black;
-          padding: 15px 30px;
-          border-radius: 10px;
-          font-size: 28px;
-          font-weight: bold;
-          z-index: 1000;
-          pointer-events: none;
-          animation: popIn 0.5s ease-out;
-        `;
-        notification.textContent = result.message;
-        document.body.appendChild(notification);
-        
-        const style = document.createElement('style');
-        style.textContent = `
-          @keyframes popIn {
-            0% { transform: translate(-50%, -50%) scale(0); }
-            50% { transform: translate(-50%, -50%) scale(1.2); }
-            100% { transform: translate(-50%, -50%) scale(1); }
-          }
-        `;
-        document.head.appendChild(style);
-        
-        setTimeout(() => {
-          notification.remove();
-          style.remove();
-        }, 1500);
+        // Уведомление при использовании предмета убрано
       }
     }
   }
@@ -307,6 +440,20 @@ function animate() {
     world.step(1 / 60, dt, CONFIG.physics.substeps);
     window.car.update();
     window.botManager.update(dt);
+
+    // Проверка столкновений ботов с минами
+    if (window.itemSystem) {
+      for (const bot of window.botManager.bots) {
+        const botPos = bot.controller.chassisBody.position;
+        window.itemSystem.checkMineCollisions(botPos, () => {
+          // Бот попал на мину - переворачиваем
+          bot.controller.flipOver();
+          // Сбрасываем скорость
+          bot.controller.chassisBody.velocity.set(0, 0, 0);
+          bot.controller.chassisBody.angularVelocity.set(0, 0, 0);
+        });
+      }
+    }
     updateCamera();
     window.hud.update(window.car, window.state, window.lapCounter);
 
@@ -348,6 +495,19 @@ function animate() {
       window.itemSystem.update(dt, track.segments);
       // Проверка сбора предметов
       window.itemSystem.checkItemCollection(window.car.mesh.position);
+      // Проверка столкновений с минами
+      window.itemSystem.checkMineCollisions(window.car.mesh.position, () => {
+        // Игрок попал на мину - переворачиваем машину
+        window.car.flipOver();
+        // Сбрасываем скорость
+        window.car.chassisBody.velocity.set(0, 0, 0);
+        window.car.chassisBody.angularVelocity.set(0, 0, 0);
+      });
+    }
+
+    // Обновляем пул эффектов
+    if (window.effectsPool) {
+      window.effectsPool.update(dt);
     }
 
     // Показываем кнопку переворота, если машина вверх дном
