@@ -83,9 +83,18 @@ export class Mine {
   /**
    * Проверка столкновения с машиной
    */
-  checkCollision(carPos, threshold = 2.5) {
+  checkCollision(car, threshold = 2.5) {
     if (!this.alive) return false;
-    const dist = carPos.distanceTo(this.position);
+    
+    // Check if car has active shield
+    if (car.hasActiveShield) {
+      if (typeof car.hasActiveShield === 'function' && car.hasActiveShield()) {
+        console.log('Mine blocked by shield!');
+        return false; // Don't trigger explosion if shield is active
+      }
+    }
+    
+    const dist = car.chassisBody.position.distanceTo(this.position);
     return dist < threshold;
   }
 

@@ -212,7 +212,6 @@ export class BotController {
     if (this._debugTimer > 2) {
       this._debugTimer = 0;
       const target = this.checkpoints[this.currentCheckpoint];
-      console.log(`🤖 Бот ${this.botIndex}: скорость=${this.speed.toFixed(1)}км/ч, цель=[${target.x.toFixed(0)},${target.z.toFixed(0)}], дист=${distToTarget.toFixed(1)}, угол=${(angle*57).toFixed(0)}°`);
     }
     
     // --- 12. Использование предметов ---
@@ -335,6 +334,66 @@ export class BotController {
       new CANNON.Vec3(forward.x * 50, 0, forward.z * 50),
       this.chassisBody.position
     );
+  }
+  
+  /**
+   * Проверяет, есть ли активный щит у машины
+   */
+  hasActiveShield() {
+    // Shield lasts for 5 seconds
+    if (this.shieldTime && (Date.now() - this.shieldTime < 5000)) {
+      return true;
+    }
+    return false;
+  }
+  
+  /**
+   * Apply boost to the bot
+   */
+  applyBoost(multiplier, duration) {
+    const cfg = CONFIG.car;
+    const boostedForce = cfg.engineForce * multiplier * this.aggression;
+    
+    // Store original state to restore later
+    this.originalBoostState = {
+      boostEndTime: Date.now() + duration
+    };
+    
+    // Apply the boost force directly
+    this.vehicle.applyEngineForce(boostedForce, 2);
+    this.vehicle.applyEngineForce(boostedForce, 3);
+    
+    // Clear any previously scheduled restoration
+    if (this.boostTimeoutId) {
+      clearTimeout(this.boostTimeoutId);
+    }
+    
+    // Schedule restoration of original state
+    this.boostTimeoutId = setTimeout(() => {
+      // Restore original engine forces after boost ends
+      if (this.vehicle) {
+        // Resume normal driving behavior after boost
+        const sharpTurn = Math.abs(this.currentSteer) > 1.0;
+        const verySharpTurn = Math.abs(this.currentSteer) > 1.5;
+        
+        if (verySharpTurn) {
+          const gasFactor = 0.8;
+          this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 2);
+          this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 3);
+        } else if (sharpTurn) {
+          const gasFactor = 0.9;
+          this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 2);
+          this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 3);
+        } else {
+          const gasFactor = 1.2;
+          const engineForce = cfg.engineForce * gasFactor * this.aggression;
+          this.vehicle.applyEngineForce(engineForce, 2);
+          this.vehicle.applyEngineForce(engineForce, 3);
+        }
+      }
+    }, duration);
+    
+    console.log('🤖 Bot Boost applied: ' + multiplier + 'x for ' + duration + 'ms');
   }
 }
 

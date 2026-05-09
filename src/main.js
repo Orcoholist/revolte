@@ -505,7 +505,7 @@ function animate() {
     if (window.itemSystem) {
       for (const bot of window.botManager.bots) {
         const botPos = bot.controller.chassisBody.position;
-        window.itemSystem.checkMineCollisions(botPos, () => {
+        window.itemSystem.checkMineCollisions(bot.controller, () => {  // Pass bot controller instead of position
           // Бот попал на мину - переворачиваем
           bot.controller.flipOver();
           // Сбрасываем скорость
@@ -559,7 +559,7 @@ function animate() {
       // Проверка сбора предметов
       window.itemSystem.checkItemCollection(window.car.mesh.position);
       // Проверка столкновений с минами
-      window.itemSystem.checkMineCollisions(window.car.mesh.position, () => {
+      window.itemSystem.checkMineCollisions(window.car, () => {  // Pass car object instead of position
         // Игрок попал на мину - переворачиваем машину
         window.car.flipOver();
         // Сбрасываем скорость

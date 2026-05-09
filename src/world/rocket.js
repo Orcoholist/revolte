@@ -231,7 +231,30 @@ export class Rocket {
   _hitTarget() {
     console.log('Rocket hit!');
 
-    if (this.targetBot && this.targetBot.controller) {
+    if (this.isTargetingPlayer && window.car) {
+      // Check if player has active shield
+      if (window.car.hasActiveShield()) {
+        console.log('Rocket blocked by player shield!');
+        this._explode();
+        return;
+      }
+      
+      // Попали в игрока
+      const car = window.car;
+      // Сбрасываем скорость игрока
+      car.chassisBody.velocity.set(0, 0, 0);
+      car.chassisBody.angularVelocity.set(0, 0, 0);
+      // Переворачиваем игрока
+      car.flipOver();
+      this._explode();
+    } else if (this.targetBot && this.targetBot.controller) {
+      // Check if bot has active shield
+      if (this.targetBot.controller.hasActiveShield()) {
+        console.log('Rocket blocked by bot shield!');
+        this._explode();
+        return;
+      }
+      
       // Попали в бота
       const bot = this.targetBot;
       // Сбрасываем скорость бота

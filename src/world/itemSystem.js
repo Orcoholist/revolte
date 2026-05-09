@@ -65,318 +65,59 @@ class TrackItem {
   }
   
   _createMesh() {
-    const color = itemColors[this.type];
+    // Create a uniform appearance for all items so they're indistinguishable until collected
     const group = new THREE.Group();
-
-    switch (this.type) {
-      case ItemType.ROCKET:
-        // Детализированная ракета
-        const rocketBody = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.3, 0.4, 2, 12),
-          new THREE.MeshPhongMaterial({
-            color: 0xcc3333,
-            emissive: 0xff2200,
-            emissiveIntensity: 0.8,
-            shininess: 100
-          })
-        );
-        rocketBody.rotation.x = Math.PI / 2;
-        rocketBody.position.y = 0.5;
-        group.add(rocketBody);
-
-        // Нос ракеты
-        const rocketNose = new THREE.Mesh(
-          new THREE.ConeGeometry(0.4, 0.8, 12),
-          new THREE.MeshPhongMaterial({
-            color: 0xff6644,
-            emissive: 0xff4400,
-            emissiveIntensity: 0.8,
-            shininess: 100
-          })
-        );
-        rocketNose.rotation.x = -Math.PI / 2;
-        rocketNose.position.z = -1.4;
-        rocketNose.position.y = 0.5;
-        group.add(rocketNose);
-
-        // Хвостовое оперение
-        for (let i = 0; i < 4; i++) {
-          const fin = new THREE.Mesh(
-            new THREE.BoxGeometry(0.1, 0.5, 0.4),
-            new THREE.MeshPhongMaterial({
-              color: 0xff2222,
-              emissive: 0xff0000,
-              emissiveIntensity: 0.6
-            })
-          );
-          const angle = (i / 4) * Math.PI * 2;
-          fin.position.set(
-            Math.cos(angle) * 0.3,
-            0.5,
-            1.3
-          );
-          fin.rotation.y = angle;
-          group.add(fin);
-        }
-
-        // Огонь в хвосте
-        const rocketFlame = new THREE.Mesh(
-          new THREE.ConeGeometry(0.2, 0.6, 8),
-          new THREE.MeshBasicMaterial({
-            color: 0xffaa00,
-            transparent: true,
-            opacity: 0.8
-          })
-        );
-        rocketFlame.rotation.x = -Math.PI / 2;
-        rocketFlame.position.z = 1.5;
-        rocketFlame.position.y = 0.5;
-        group.add(rocketFlame);
-        break;
-        
-      case ItemType.MINE:
-        // Детализированная мина с шипами
-        const mineCore = new THREE.Mesh(
-          new THREE.SphereGeometry(0.8, 16, 16),
-          new THREE.MeshPhongMaterial({
-            color: 0xff6600,
-            emissive: 0xff4400,
-            emissiveIntensity: 0.6,
-            shininess: 50
-          })
-        );
-        group.add(mineCore);
-
-        // Шипы
-        for (let i = 0; i < 12; i++) {
-          const spike = new THREE.Mesh(
-            new THREE.ConeGeometry(0.12, 0.5, 6),
-            new THREE.MeshPhongMaterial({
-              color: 0xff3300,
-              emissive: 0xff2200,
-              emissiveIntensity: 0.8
-            })
-          );
-          const angle = (i / 12) * Math.PI * 2;
-          spike.position.set(
-            Math.cos(angle) * 0.8,
-            0.3,
-            Math.sin(angle) * 0.8
-          );
-          spike.rotation.x = Math.PI / 4;
-          spike.rotation.z = angle;
-          group.add(spike);
-        }
-
-        // Пульсирующее кольцо
-        const mineRing = new THREE.Mesh(
-          new THREE.TorusGeometry(1.1, 0.08, 8, 24),
-          new THREE.MeshBasicMaterial({
-            color: 0xff8800,
-            transparent: true,
-            opacity: 0.6
-          })
-        );
-        mineRing.rotation.x = Math.PI / 2;
-        mineRing.position.y = 0.3;
-        group.add(mineRing);
-        group.userData.mineRing = mineRing;
-        break;
-        
-      case ItemType.SHIELD:
-        // Красивый щит с кольцами
-        const shieldCore = new THREE.Mesh(
-          new THREE.IcosahedronGeometry(0.8, 0),
-          new THREE.MeshPhongMaterial({
-            color: 0x4488ff,
-            emissive: 0x2266ff,
-            emissiveIntensity: 0.4,
-            transparent: true,
-            opacity: 0.7,
-            shininess: 100
-          })
-        );
-        group.add(shieldCore);
-
-        // Внешнее кольцо
-        const shieldOuterRing = new THREE.Mesh(
-          new THREE.TorusGeometry(1.2, 0.1, 8, 32),
-          new THREE.MeshBasicMaterial({
-            color: 0x66aaff,
-            transparent: true,
-            opacity: 0.8
-          })
-        );
-        shieldOuterRing.rotation.x = Math.PI / 2;
-        group.add(shieldOuterRing);
-
-        // Внутреннее кольцо
-        const shieldInnerRing = new THREE.Mesh(
-          new THREE.TorusGeometry(0.9, 0.08, 8, 24),
-          new THREE.MeshBasicMaterial({
-            color: 0x88ccff,
-            transparent: true,
-            opacity: 0.6
-          })
-        );
-        shieldInnerRing.rotation.x = Math.PI / 2;
-        group.add(shieldInnerRing);
-
-        // Частицы вокруг щита
-        for (let i = 0; i < 6; i++) {
-          const particle = new THREE.Mesh(
-            new THREE.SphereGeometry(0.1, 8, 8),
-            new THREE.MeshBasicMaterial({
-              color: 0xaaddff,
-              transparent: true,
-              opacity: 0.8
-            })
-          );
-          const angle = (i / 6) * Math.PI * 2;
-          particle.position.set(
-            Math.cos(angle) * 1.4,
-            0,
-            Math.sin(angle) * 1.4
-          );
-          group.add(particle);
-          group.userData.shieldParticles = group.userData.shieldParticles || [];
-          group.userData.shieldParticles.push({ mesh: particle, angle });
-        }
-        break;
-        
-      case ItemType.SUPERBOOST:
-        // Супер-ускорение - большая яркая звезда
-        const superBoostCore = new THREE.Mesh(
-          new THREE.OctahedronGeometry(1.0, 0),
-          new THREE.MeshPhongMaterial({
-            color: 0xffd700,
-            emissive: 0xffaa00,
-            emissiveIntensity: 0.8,
-            transparent: true,
-            opacity: 0.9,
-            shininess: 100
-          })
-        );
-        group.add(superBoostCore);
-
-        // Дополнительные лучи
-        for (let i = 0; i < 8; i++) {
-          const ray = new THREE.Mesh(
-            new THREE.ConeGeometry(0.15, 0.8, 4),
-            new THREE.MeshBasicMaterial({
-              color: 0xffcc00,
-              transparent: true,
-              opacity: 0.7
-            })
-          );
-          const angle = (i / 8) * Math.PI * 2;
-          ray.position.set(
-            Math.cos(angle) * 1.0,
-            0,
-            Math.sin(angle) * 1.0
-          );
-          ray.rotation.x = Math.PI / 2;
-          ray.rotation.z = angle;
-          group.add(ray);
-        }
-
-        // Внешнее свечение
-        const superBoostGlow = new THREE.Mesh(
-          new THREE.SphereGeometry(1.3, 16, 16),
-          new THREE.MeshBasicMaterial({
-            color: 0xffaa00,
-            transparent: true,
-            opacity: 0.2
-          })
-        );
-        group.add(superBoostGlow);
-        break;
-        
-      case ItemType.BOOST:
-        // Обычное ускорение - звезда
-        const boostCore = new THREE.Mesh(
-          new THREE.OctahedronGeometry(0.7, 0),
-          new THREE.MeshPhongMaterial({
-            color: 0x44ff44,
-            emissive: 0x22cc22,
-            emissiveIntensity: 0.5,
-            transparent: true,
-            opacity: 0.8,
-            shininess: 100
-          })
-        );
-        group.add(boostCore);
-
-        // Лучи
-        for (let i = 0; i < 6; i++) {
-          const ray = new THREE.Mesh(
-            new THREE.ConeGeometry(0.1, 0.5, 4),
-            new THREE.MeshBasicMaterial({
-              color: 0x66ff66,
-              transparent: true,
-              opacity: 0.6
-            })
-          );
-          const angle = (i / 6) * Math.PI * 2;
-          ray.position.set(
-            Math.cos(angle) * 0.7,
-            0,
-            Math.sin(angle) * 0.7
-          );
-          ray.rotation.x = Math.PI / 2;
-          ray.rotation.z = angle;
-          group.add(ray);
-        }
-        break;
-
-      case ItemType.OIL:
-        // Масляное пятно - лужа с блеском
-        const oilBase = new THREE.Mesh(
-          new THREE.CylinderGeometry(1.5, 1.8, 0.08, 24),
-          new THREE.MeshPhongMaterial({
-            color: 0x222222,
-            emissive: 0x111111,
-            emissiveIntensity: 0.1,
-            transparent: true,
-            opacity: 0.85,
-            shininess: 150
-          })
-        );
-        group.add(oilBase);
-
-        // Блестящие капли
-        for (let i = 0; i < 8; i++) {
-          const droplet = new THREE.Mesh(
-            new THREE.CircleGeometry(0.15 + Math.random() * 0.1, 8),
-            new THREE.MeshBasicMaterial({
-              color: 0x444444,
-              transparent: true,
-              opacity: 0.6
-            })
-          );
-          const angle = Math.random() * Math.PI * 2;
-          const dist = Math.random() * 1.2;
-          droplet.position.set(
-            Math.cos(angle) * dist,
-            0.05,
-            Math.sin(angle) * dist
-          );
-          droplet.rotation.x = -Math.PI / 2;
-          group.add(droplet);
-        }
-        break;
-
-      default:
-        // Заглушка
-        const defaultMesh = new THREE.Mesh(
-          new THREE.BoxGeometry(1, 1, 1),
-          new THREE.MeshPhongMaterial({ color: color })
-        );
-        group.add(defaultMesh);
-    }
-
+    
+    // Base sphere that looks the same for all items
+    const baseGeo = new THREE.SphereGeometry(0.7, 16, 16);
+    const baseMat = new THREE.MeshPhongMaterial({
+      color: 0xffffff, // White base color
+      emissive: 0x222222, // Slight glow
+      emissiveIntensity: 0.5,
+      shininess: 80,
+      transparent: true,
+      opacity: 0.9
+    });
+    const base = new THREE.Mesh(baseGeo, baseMat);
+    base.castShadow = true;
+    base.receiveShadow = true;
+    group.add(base);
+    
+    // Rotating ring element
+    const ringGeo = new THREE.TorusGeometry(0.9, 0.15, 8, 16);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0x00ffff, // Cyan color that works for all items
+      transparent: true,
+      opacity: 0.7
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI / 2;
+    group.add(ring);
+    
+    // Pulsating inner core
+    const coreGeo = new THREE.IcosahedronGeometry(0.4, 1);
+    const coreMat = new THREE.MeshPhongMaterial({
+      color: 0x00ffff, // Cyan color
+      emissive: 0x00aaaa,
+      emissiveIntensity: 0.6,
+      shininess: 100
+    });
+    const core = new THREE.Mesh(coreGeo, coreMat);
+    group.add(core);
+    
+    // Add a subtle label or indicator that doesn't reveal the actual item type
+    const indicatorGeo = new THREE.SphereGeometry(0.15, 8, 8);
+    const indicatorMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff, // White indicator
+      transparent: true,
+      opacity: 0.9
+    });
+    const indicator = new THREE.Mesh(indicatorGeo, indicatorMat);
+    indicator.position.y = 0.8;
+    group.add(indicator);
+    
     group.position.copy(this.position);
-    group.position.y += 0.5;
+    group.position.y += 0.5; // Lift off ground slightly
 
     return group;
   }
@@ -520,7 +261,6 @@ export class ItemSystem {
     const item = new TrackItem(type, pos, this.scene);
     this.trackItems.push(item);
     
-    console.log('Item spawned: ' + itemNames[type] + ' at (' + pos.x.toFixed(0) + ', ' + pos.z.toFixed(0) + ')');
   }
   
   _weightedRandom(items, weights) {
@@ -658,6 +398,12 @@ export class ItemSystem {
             
             // Add the item to the bot's inventory
             if (bot.items && Array.isArray(bot.items)) {
+              // Check if bot already has an item - if so, don't pick up a new one
+              if (bot.items.length > 0) {
+                // Bot already has an item, skip picking up this one
+                continue;
+              }
+              
               // Add the item to bot's inventory
               bot.items.push({
                 type: item.type,
@@ -819,7 +565,7 @@ export class ItemSystem {
         
       case ItemType.ROCKET:
         // Создаем ракету, направленную на игрока
-        if (window.car && bot.controller) {
+        if (window.car && window.botManager) {
           // Направляем ракету от позиции бота к позиции игрока
           const rocket = new Rocket(bot.mesh, this.scene, window.botManager);
           this.activeRockets.push(rocket);
@@ -886,10 +632,10 @@ export class ItemSystem {
   /**
    * Проверка столкновений с минами
    */
-  checkMineCollisions(carPos, onHit = null) {
+  checkMineCollisions(car, onHit = null) {
     for (let i = this.activeMines.length - 1; i >= 0; i--) {
       const mine = this.activeMines[i];
-      if (mine.checkCollision(carPos)) {
+      if (mine.checkCollision(car)) {
         mine.explode();
         this.activeMines.splice(i, 1);
         if (onHit) onHit();

@@ -66,7 +66,8 @@ export class InputManager {
       'btn-gas': 'gas',
       'btn-brake': 'brake',
       'btn-left': 'left',
-      'btn-right': 'right'
+      'btn-right': 'right',
+      'btn-reverse': 'reverse'  // Adding reverse button
     };
 
     for (const [id, key] of Object.entries(btns)) {
@@ -86,19 +87,44 @@ export class InputManager {
       }, { passive: false });
     }
 
-    // Кнопка предмета (бывшая reverse) — one-shot
+    // Keep the item usage functionality as a separate touch handler on the same button
     const itemBtn = document.getElementById('btn-reverse');
     if (itemBtn) {
+      // Add a long press or double tap to use item, while short tap remains for reverse
+      let pressTimer = null;
+      
       itemBtn.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if (!this._mobile.useItemPressed) {
-          this._mobile.useItemPressed = true;
-          this._fireUseItem();
-        }
+        pressTimer = window.setTimeout(() => {
+          // Long press - use item
+          if (!this._mobile.useItemPressed) {
+            this._mobile.useItemPressed = true;
+            this._fireUseItem();
+          }
+          pressTimer = null;
+        }, 500); // 500ms for long press
       }, { passive: false });
 
       itemBtn.addEventListener('touchend', (e) => {
         e.preventDefault();
+        // Short press - cancel long press and trigger reverse
+        if (pressTimer) {
+          clearTimeout(pressTimer);
+          // Trigger reverse movement
+          this._mobile.reverse = true;
+          this._syncMobile();
+        }
+        this._mobile.useItemPressed = false;
+      }, { passive: false });
+      
+      // Also handle touch cancel events
+      itemBtn.addEventListener('touchcancel', (e) => {
+        e.preventDefault();
+        if (pressTimer) {
+          clearTimeout(pressTimer);
+        }
+        this._mobile.reverse = false;
+        this._syncMobile();
         this._mobile.useItemPressed = false;
       }, { passive: false });
     }
