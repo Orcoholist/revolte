@@ -394,6 +394,20 @@
       border-color: #4ade80;
       box-shadow: 0 0 12px rgba(74, 222, 128, 0.4);
     }
+    #item-indicator.mobile-item {
+      top: auto;
+      right: auto;
+      bottom: 45px;
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: 70px;
+      min-height: 70px;
+      border-radius: 14px;
+      z-index: 10;
+    }
+    #item-indicator.mobile-item:active {
+      transform: translateX(-50%) scale(0.9);
+    }
     
     #item-icon {
       font-size: 32px;
@@ -445,6 +459,10 @@
       </div>
       <div id="loading-text">Загрузка модели...</div>
       <button id="start-btn" style="display: none;">🏁 СТАРТ</button>
+      <div id="controls-info" style="margin-top: 24px; color: rgba(255,255,255,0.5); font-size: 13px; text-align: center; line-height: 1.6;">
+        🖥️ WASD / Стрелки — управление<br>
+        Пробел — тормоз · R — перевернуть · Ctrl — предмет
+      </div>
     </div>
     <div id="result-screen">
       <div class="trophy">🏆</div>

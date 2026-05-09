@@ -245,6 +245,9 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
     // Показываем мобильные контролы
     mobileControls.style.display = 'block';
     
+    // Перемещаем индикатор предмета вниз по центру на мобильных
+    document.getElementById('item-indicator').classList.add('mobile-item');
+    
     // Добавляем обработчики для мобильных кнопок
     const btnLeft = document.getElementById('btn-left');
     const btnRight = document.getElementById('btn-right');
