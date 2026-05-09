@@ -5,8 +5,9 @@
 export class InputManager {
   constructor() {
     this.state = { forward: false, backward: false, left: false, right: false, brake: false };
-    this._mobile = { gas: false, brake: false, reverse: false, left: false, right: false };
+    this._mobile = { gas: false, brake: false, left: false, right: false, useItemPressed: false };
     this._onUpdate = null; // колбэк при изменении
+    this._onUseItem = null; // колбэк при нажатии кнопки предмета
 
     this._initKeyboard();
     this._initMobile();
@@ -19,8 +20,19 @@ export class InputManager {
     this._onUpdate = callback;
   }
 
+  /**
+   * Установить колбэк, вызываемый при нажатии кнопки использования предмета.
+   */
+  onUseItem(callback) {
+    this._onUseItem = callback;
+  }
+
   _fire() {
     if (this._onUpdate) this._onUpdate({ ...this.state });
+  }
+
+  _fireUseItem() {
+    if (this._onUseItem) this._onUseItem();
   }
 
   _initKeyboard() {
@@ -53,7 +65,6 @@ export class InputManager {
     const btns = {
       'btn-gas': 'gas',
       'btn-brake': 'brake',
-      'btn-reverse': 'reverse',
       'btn-left': 'left',
       'btn-right': 'right'
     };
@@ -72,6 +83,23 @@ export class InputManager {
         e.preventDefault();
         this._mobile[key] = false;
         this._syncMobile();
+      }, { passive: false });
+    }
+
+    // Кнопка предмета (бывшая reverse) — one-shot
+    const itemBtn = document.getElementById('btn-reverse');
+    if (itemBtn) {
+      itemBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (!this._mobile.useItemPressed) {
+          this._mobile.useItemPressed = true;
+          this._fireUseItem();
+        }
+      }, { passive: false });
+
+      itemBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        this._mobile.useItemPressed = false;
       }, { passive: false });
     }
   }

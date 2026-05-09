@@ -34,6 +34,15 @@ createEnvironment(scene, world);
 // Храним препятствия для проверки столкновений
 const obstacles = track.obstacles;
 
+// Инициализация специальных элементов трассы
+let trackElements = [];
+if (track.elements && track.elements.length > 0) {
+  trackElements = track.elements;
+} else {
+  // Резервная инициализация, если элементов нет
+  trackElements = [];
+}
+
 // ==================== СОСТОЯНИЕ ИГРЫ ====================
 window.state = {
   isPlaying: false,
@@ -160,6 +169,17 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
   const input = new InputManager();
   input.onUpdate((state) => { window.car.input = state; });
 
+  // Кнопка использования предмета на мобильных (бывшая reverse)
+  input.onUseItem(() => {
+    if (window.state.isPlaying && window.itemSystem && window.car) {
+      const itemType = window.itemSystem.useItem();
+      if (itemType) {
+        const result = window.itemSystem.applyItemEffect(itemType, window.car);
+        console.log(result.message);
+      }
+    }
+  });
+
   // Telegram
   initTelegram();
 
@@ -248,54 +268,15 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
     // Перемещаем индикатор предмета вниз по центру на мобильных
     document.getElementById('item-indicator').classList.add('mobile-item');
     
-    // Добавляем обработчики для мобильных кнопок
-    const btnLeft = document.getElementById('btn-left');
-    const btnRight = document.getElementById('btn-right');
-    const btnGas = document.getElementById('btn-gas');
-    const btnBrake = document.getElementById('btn-brake');
-    
-    // Обработчики поворота
-    btnLeft.addEventListener('touchstart', () => {
-      window.car.input.left = true;
-      btnLeft.classList.add('active');
-    }, { passive: false });
-    
-    btnLeft.addEventListener('touchend', () => {
-      window.car.input.left = false;
-      btnLeft.classList.remove('active');
-    }, { passive: false });
-    
-    btnRight.addEventListener('touchstart', () => {
-      window.car.input.right = true;
-      btnRight.classList.add('active');
-    }, { passive: false });
-    
-    btnRight.addEventListener('touchend', () => {
-      window.car.input.right = false;
-      btnRight.classList.remove('active');
-    }, { passive: false });
-    
-    // Обработчики газа и тормоза
-    btnGas.addEventListener('touchstart', () => {
-      window.car.input.accelerate = true;
-      btnGas.classList.add('active');
-    }, { passive: false });
-    
-    btnGas.addEventListener('touchend', () => {
-      window.car.input.accelerate = false;
-      btnGas.classList.remove('active');
-    }, { passive: false });
-    
-    btnBrake.addEventListener('touchstart', () => {
-      window.car.input.brake = true;
-      btnBrake.classList.add('active');
-    }, { passive: false });
-    
-    btnBrake.addEventListener('touchend', () => {
-      window.car.input.brake = false;
-      btnBrake.classList.remove('active');
-    }, { passive: false });
-    
+    // Визуальная обратная связь для кнопок (active-класс)
+    const btnIds = ['btn-left', 'btn-right', 'btn-gas', 'btn-brake', 'btn-reverse'];
+    for (const id of btnIds) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.addEventListener('touchstart', () => el.classList.add('active'), { passive: false });
+      el.addEventListener('touchend', () => el.classList.remove('active'), { passive: false });
+    }
+
     // Убедимся, что кнопка переворота отображается
     flipBtn.style.display = 'block';
   } else {
@@ -334,7 +315,7 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
     }
   }, { passive: false });
 });
-
+      
 // ==================== КАМЕРА ====================
 
 const camTarget = new THREE.Vector3();
@@ -410,6 +391,67 @@ function checkObstacleCollisions(carPos) {
       if (dist > 20) {
         scene.remove(obstacle);
         obstacles.splice(i, 1);
+      }
+    }
+  }
+}
+
+// ==================== ПРОВЕРКА СТОЛКНОВЕНИЙ С ОСОБЫМИ ЭЛЕМЕНТАМИ ТРАССЫ ====================
+
+function checkSpecialTrackCollisions(carPos, carBody) {
+  // Проверка столкновений со всеми специальными элементами трассы
+  if (trackElements && trackElements.length > 0) {
+    for (const element of trackElements) {
+      // Пропускаем элементы без физического тела
+      if (!element.physics) continue;
+      
+      const dist = carPos.distanceTo(element.visual.position);
+      
+      // Проверяем тип элемента и обрабатываем столкновение
+      if (element.type === 'ramp' && dist < element.physics.collisionRadius) {
+        const carDirection = new THREE.Vector3();
+        carBody.vectorToWorldFrame(new THREE.Vector3(0, 0, -1), carDirection);
+        const toElement = new THREE.Vector3().subVectors(element.visual.position, carPos).normalize();
+        
+        // Если машина движется в направлении элемента
+        if (carDirection.dot(toElement) > 0.7) {
+          // Добавляем импульс прыжка
+          carBody.applyImpulse(
+            new CANNON.Vec3(
+              0, 
+              element.physics.bounceFactor * 200, 
+              0
+            ),
+            carBody.position
+          );
+          
+          // Создаем визуальный эффект при использовании трамплина
+          createItemEffect('jump', element.visual.position);
+        }
+      }
+      
+      // Обработка столкновения с петлями
+      if (element.type === 'loop' && dist < element.physics.collisionRadius) {
+        // Добавляем небольшой импульс вверх при прохождении через петлю
+        carBody.applyImpulse(
+          new CANNON.Vec3(0, element.physics.bounceFactor * 50, 0),
+          carBody.position
+        );
+        
+        // Визуальный эффект при прохождении через петлю
+        createItemEffect('loop', element.visual.position);
+      }
+      
+      // Обработка столкновения с туннелями
+      if (element.type === 'tunnel' && dist < element.physics.collisionRadius) {
+        // Уменьшаем сопротивление воздуха при нахождении в туннеле
+        const dragFactor = 0.5; // Коэффициент уменьшения сопротивления
+        const currentVelocity = carBody.velocity.clone();
+        currentVelocity.scale(dragFactor, currentVelocity);
+        carBody.velocity.copy(currentVelocity);
+        
+        // Визуальный эффект при входе в туннель
+        createItemEffect('tunnel', element.visual.position);
       }
     }
   }
@@ -493,6 +535,9 @@ function animate() {
 
     // Проверка столкновений с препятствиями
     checkObstacleCollisions(window.car.mesh.position);
+
+    // Проверка столкновений со специальными элементами трассы
+    checkSpecialTrackCollisions(carPos, window.car.chassisBody);
 
     // Обновление счётчика кругов
     if (window.lapCounter) {

@@ -18,6 +18,16 @@ export class CarController {
     // Инерция поворота (для плавности)
     this.currentSteer = 0;
     this.steerSpeed = 0.015; // Очень плавный поворот для мобильных
+    
+    // Состояние машины
+    this.inAir = false;
+    this.inTunnel = false;
+    this.onLoop = false;
+    this.onRamp = false;
+    
+    // Для определения элементов трассы
+    this.trackElementCheckInterval = 100; // проверка каждые 100мс
+    this.lastTrackCheckTime = 0;
   }
 
   /**

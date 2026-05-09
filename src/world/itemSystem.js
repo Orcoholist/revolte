@@ -76,7 +76,7 @@ class TrackItem {
           new THREE.MeshPhongMaterial({
             color: 0xcc3333,
             emissive: 0xff2200,
-            emissiveIntensity: 0.4,
+            emissiveIntensity: 0.8,
             shininess: 100
           })
         );
@@ -90,7 +90,7 @@ class TrackItem {
           new THREE.MeshPhongMaterial({
             color: 0xff6644,
             emissive: 0xff4400,
-            emissiveIntensity: 0.5,
+            emissiveIntensity: 0.8,
             shininess: 100
           })
         );
@@ -106,7 +106,7 @@ class TrackItem {
             new THREE.MeshPhongMaterial({
               color: 0xff2222,
               emissive: 0xff0000,
-              emissiveIntensity: 0.3
+              emissiveIntensity: 0.6
             })
           );
           const angle = (i / 4) * Math.PI * 2;
@@ -141,7 +141,7 @@ class TrackItem {
           new THREE.MeshPhongMaterial({
             color: 0xff6600,
             emissive: 0xff4400,
-            emissiveIntensity: 0.3,
+            emissiveIntensity: 0.6,
             shininess: 50
           })
         );
@@ -154,7 +154,7 @@ class TrackItem {
             new THREE.MeshPhongMaterial({
               color: 0xff3300,
               emissive: 0xff2200,
-              emissiveIntensity: 0.5
+              emissiveIntensity: 0.8
             })
           );
           const angle = (i / 12) * Math.PI * 2;
@@ -378,13 +378,6 @@ class TrackItem {
     group.position.copy(this.position);
     group.position.y += 0.5;
 
-    // Добавляем свечение
-    const light = new THREE.PointLight(color, 0.4, 8);
-    light.position.copy(group.position);
-    light.position.y += 0.5;
-    this.scene.add(light);
-    group.userData.light = light;
-
     return group;
   }
   
@@ -411,10 +404,6 @@ class TrackItem {
           child.material.transparent = true;
         }
       });
-      // Свет гаснет
-      if (this.mesh.userData.light) {
-        this.mesh.userData.light.intensity = 0.4 * (1 - progress);
-      }
       return false;
     }
 
@@ -425,11 +414,6 @@ class TrackItem {
     // Пульсация
     const scale = 1 + Math.sin(Date.now() * 0.005) * 0.15;
     this.mesh.scale.set(scale, scale, scale);
-    
-    // Свет тоже пульсирует
-    if (this.mesh.userData.light) {
-      this.mesh.userData.light.intensity = 0.4 + Math.sin(Date.now() * 0.005) * 0.2;
-    }
     
     // Дополнительная анимация для особых предметов
     if (this.type === ItemType.MINE && this.mesh.userData.mineRing) {
@@ -455,12 +439,6 @@ class TrackItem {
   }
   
   destroy() {
-    // Удаляем свет
-    if (this.mesh.userData.light) {
-      this.scene.remove(this.mesh.userData.light);
-      this.mesh.userData.light = null;
-    }
-
     // Удаляем все части группы и их материалы
     this.mesh.traverse((child) => {
       if (child.geometry) {
