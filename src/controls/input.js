@@ -5,7 +5,7 @@
 export class InputManager {
   constructor() {
     this.state = { forward: false, backward: false, left: false, right: false, brake: false };
-    this._mobile = { gas: false, brake: false, left: false, right: false };
+    this._mobile = { gas: false, brake: false, reverse: false, left: false, right: false };
     this._onUpdate = null; // колбэк при изменении
 
     this._initKeyboard();
@@ -53,6 +53,7 @@ export class InputManager {
     const btns = {
       'btn-gas': 'gas',
       'btn-brake': 'brake',
+      'btn-reverse': 'reverse',
       'btn-left': 'left',
       'btn-right': 'right'
     };

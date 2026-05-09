@@ -269,16 +269,16 @@
     }
     #mobile-action-zone {
       position: absolute;
-      bottom: 30px;
-      right: 15px;
-      width: 110px;
-      height: 160px;
+      bottom: 20px;
+      right: 10px;
+      width: 90px;
+      height: 220px;
       pointer-events: auto;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: flex-end;
-      gap: 8px;
+      gap: 6px;
       touch-action: none;
     }
     #mobile-action-zone .action-btn {
@@ -307,6 +307,20 @@
       box-shadow: 0 0 30px rgba(74, 222, 128, 0.5);
       border-color: #4ade80;
     }
+    #btn-reverse {
+      width: 54px;
+      height: 54px;
+      background: radial-gradient(circle at 40% 35%, #fbbf24 0%, #d97706 100%);
+      border: 2px solid rgba(251, 191, 36, 0.5);
+      font-size: 18px;
+      color: #fff;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    #btn-reverse:active, #btn-reverse.active {
+      transform: scale(0.92);
+      box-shadow: 0 0 25px rgba(251, 191, 36, 0.5);
+      border-color: #fbbf24;
+    }
     #btn-brake {
       width: 54px;
       height: 54px;
@@ -330,12 +344,16 @@
       pointer-events: none;
     }
     #mobile-controls .label-gas {
-      bottom: 95px;
-      right: 65px;
+      bottom: 195px;
+      right: 50px;
+    }
+    #mobile-controls .label-reverse {
+      bottom: 130px;
+      right: 45px;
     }
     #mobile-controls .label-brake {
-      bottom: 8px;
-      right: 60px;
+      bottom: 65px;
+      right: 45px;
     }
     #mobile-controls .label-left {
       bottom: -5px;
@@ -400,13 +418,21 @@
       bottom: 45px;
       left: 50%;
       transform: translateX(-50%);
-      min-width: 70px;
-      min-height: 70px;
+      min-width: 56px;
+      min-height: 56px;
+      padding: 6px;
       border-radius: 14px;
       z-index: 10;
     }
     #item-indicator.mobile-item:active {
       transform: translateX(-50%) scale(0.9);
+    }
+    #item-indicator.mobile-item #item-icon {
+      font-size: 24px;
+      margin-bottom: 2px;
+    }
+    #item-indicator.mobile-item #item-name {
+      font-size: 10px;
     }
     
     #item-icon {
@@ -445,9 +471,11 @@
         </div>
         <div id="mobile-action-zone">
           <button class="action-btn" id="btn-gas">⛽</button>
+          <button class="action-btn" id="btn-reverse">⏪</button>
           <button class="action-btn" id="btn-brake">✕</button>
           <span class="mobile-label label-gas">GAS</span>
-          <span class="mobile-label label-brake">BRAKE</span>
+          <span class="mobile-label label-reverse">REV</span>
+          <span class="mobile-label label-brake">BRK</span>
         </div>
       </div>
       <button id="flip-btn">🔄 Перевернуть</button>
