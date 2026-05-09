@@ -540,6 +540,9 @@ export class ItemSystem {
    * Проверка сбора предметов игроком
    */
   checkItemCollection(playerPos) {
+    // Если у игрока уже есть неиспользованный предмет — новые не подбираем
+    if (this.playerItems.length > 0) return;
+
     for (let i = this.trackItems.length - 1; i >= 0; i--) {
       const item = this.trackItems[i];
       if (!item.collected && item.checkCollection(playerPos)) {
@@ -639,6 +642,36 @@ export class ItemSystem {
       if (!item.ready && now - item.time >= this.itemCooldown) {
         item.ready = true;
         this._showItemReadyNotification(item.type);
+      }
+    }
+    
+    // Проверка сбора предметов ботами
+    if (window.botManager) {
+      for (let i = this.trackItems.length - 1; i >= 0; i--) {
+        const item = this.trackItems[i];
+        if (!item.collected) {
+          const bot = window.botManager.checkItemCollection(item.position, item.type);
+          if (bot) {
+            // Remove the item from the track
+            item.destroy();
+            this.trackItems.splice(i, 1);
+            
+            // Add the item to the bot's inventory
+            if (bot.items && Array.isArray(bot.items)) {
+              // Add the item to bot's inventory
+              bot.items.push({
+                type: item.type,
+                time: Date.now(),
+                ready: false  // Item needs to cool down before use
+              });
+              
+              // Visual effect
+              if (window.createItemEffect) {
+                window.createItemEffect('item-collect', item.mesh);
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -745,6 +778,90 @@ export class ItemSystem {
           window.createItemEffect('oil', car.mesh);
         }
         return { success: true, message: 'Масло разлито!' };
+        
+      default:
+        return { success: false, message: 'Неизвестный предмет' };
+    }
+  }
+  
+  /**
+   * Применить эффект предмета для бота
+   */
+  applyItemEffectToBot(type, bot) {
+    switch (type) {
+      case ItemType.BOOST:
+        // Временное ускорение
+        bot.applyBoost(1.5, 3000);
+        // Визуальный эффект
+        if (window.createItemEffect) {
+          window.createItemEffect('boost', bot.mesh);
+        }
+        return { success: true, message: 'Бот получил ускорение!' };
+        
+      case ItemType.SUPERBOOST:
+        // Супер ускорение
+        bot.applyBoost(2.5, 2000);
+        // Визуальный эффект
+        if (window.createItemEffect) {
+          window.createItemEffect('superboost', bot.mesh);
+        }
+        return { success: true, message: 'Бот получил супер-ускорение!' };
+        
+      case ItemType.SHIELD:
+        // Щит на время
+        bot.hasShield = true;
+        bot.shieldTime = Date.now();
+        // Визуальный эффект
+        if (window.createItemEffect) {
+          window.createItemEffect('shield', bot.mesh);
+        }
+        return { success: true, message: 'Бот получил щит!' };
+        
+      case ItemType.ROCKET:
+        // Создаем ракету, направленную на игрока
+        if (window.car && bot.controller) {
+          // Направляем ракету от позиции бота к позиции игрока
+          const rocket = new Rocket(bot.mesh, this.scene, window.botManager);
+          this.activeRockets.push(rocket);
+          // Визуальный эффект
+          if (window.createItemEffect) {
+            window.createItemEffect('rocket', bot.mesh);
+          }
+          return { success: true, message: 'Бот выпустил ракету!' };
+        }
+        return { success: false, message: 'Ошибка запуска ракеты!' };
+        
+      case ItemType.MINE:
+        // Мина позади бота
+        const backward = new THREE.Vector3(0, 0, 1);
+        backward.applyQuaternion(bot.mesh.quaternion);
+        const minePos = bot.mesh.position.clone().add(backward.multiplyScalar(3));
+        minePos.y = 0;
+
+        const mine = new Mine(minePos, this.scene);
+        this.activeMines.push(mine);
+
+        // Визуальный эффект
+        if (window.createItemEffect) {
+          window.createItemEffect('mine', bot.mesh);
+        }
+        return { success: true, message: 'Бот установил мину!' };
+        
+      case ItemType.OIL:
+        // Масляное пятно позади бота
+        const oilBackward = new THREE.Vector3(0, 0, 1);
+        oilBackward.applyQuaternion(bot.mesh.quaternion);
+        const oilPos = bot.mesh.position.clone().add(oilBackward.multiplyScalar(2));
+        oilPos.y = 0.1;
+
+        // Визуальный эффект
+        if (window.createItemEffect) {
+          window.createItemEffect('oil', bot.mesh);
+        }
+        
+        // Масляное пятно влияет на других участников
+        // Реализуется в основной логике игры
+        return { success: true, message: 'Бот оставил масляное пятно!' };
         
       default:
         return { success: false, message: 'Неизвестный предмет' };

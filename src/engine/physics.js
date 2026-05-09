@@ -1,4 +1,4 @@
-import * as CANNON from 'cannon-es';
+ import * as CANNON from 'cannon-es';
 import { CONFIG } from './config.js';
 
 export function createPhysicsWorld() {

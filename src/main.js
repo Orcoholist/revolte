@@ -100,7 +100,8 @@ function restartRace() {
   window.botManager.reset();
   if (window.itemSystem) {
     window.itemSystem.clear();
-    for (let i = 0; i < window.itemSystem.maxTrackItems; i++) {
+    // Spawn 18 items instead of maxTrackItems for more variety on the map
+    for (let i = 0; i < 18; i++) {
       window.itemSystem.spawnItem(track.segments);
     }
   }
@@ -154,14 +155,14 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
 
   // Создаём AI-ботов (случайные позиции на трассе, свои чекпоинты)
   window.botManager = new BotManager(scene, world, wheelMat, track.segments);
-  window.botManager.spawnBots(5);
+  window.botManager.spawnBots(7); // Increased from 5 to 7 bots
 
   // Создаём систему предметов (как в Revolt!)
   window.itemSystem = new ItemSystem(scene);
   // Создаём пул эффектов для оптимизации
   window.effectsPool = new EffectsPool(scene);
-  // Спавним первые предметы (случайные типы и позиции)
-  for (let i = 0; i < window.itemSystem.maxTrackItems; i++) {
+  // Спавним больше предметов (увеличено с 6 до 12)
+  for (let i = 0; i < 12; i++) {
     window.itemSystem.spawnItem(track.segments);
   }
 
@@ -253,11 +254,6 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
     }
   }
 
-  // ==================== ОПРЕДЕЛЕНИЕ МОБИЛЬНОГО УСТРОЙСТВА ====================
-  function isMobileDevice() {
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  }
-
   // Показать мобильные контролы, если это мобильное устройство
   const mobileControls = document.getElementById('mobile-controls');
 
@@ -321,16 +317,26 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
 const camTarget = new THREE.Vector3();
 const camLookAt = new THREE.Vector3();
 
+function isMobileDevice() {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
 function updateCamera() {
+  // На мобильных уменьшаем дистанцию и высоту камеры
+  const isMobile = isMobileDevice();
+  const camDistance = isMobile ? CONFIG.camera.distance * 0.65 : CONFIG.camera.distance;
+  const camHeight   = isMobile ? CONFIG.camera.height   * 0.65 : CONFIG.camera.height;
+  const speedZoom   = isMobile ? CONFIG.camera.speedZoomFactor * 0.5 : CONFIG.camera.speedZoomFactor;
+
   // Направление "назад" от машины (учитываем поворот)
   const back = new THREE.Vector3(0, 0, 1); // "назад" в локальных координатах
   back.applyQuaternion(window.car.mesh.quaternion);
 
   camTarget.copy(window.car.mesh.position);
-  camTarget.add(back.multiplyScalar(CONFIG.camera.distance));
-  camTarget.y += CONFIG.camera.height;
+  camTarget.add(back.multiplyScalar(camDistance));
+  camTarget.y += camHeight;
 
-  const speedFactor = Math.min(window.car.speed / 150, CONFIG.camera.speedZoomFactor);
+  const speedFactor = Math.min(window.car.speed / 150, speedZoom);
   camTarget.add(back.clone().normalize().multiplyScalar(speedFactor * 6));
   camTarget.y += speedFactor * 2;
 

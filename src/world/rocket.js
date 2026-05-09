@@ -149,7 +149,17 @@ export class Rocket {
 
   _findTarget() {
     // Если уже есть цель и она валидна, продолжаем преследование
-    if (this.targetBot && this.targetBot.controller && this.targetBot.controller.chassisBody) {
+    if (this.isTargetingPlayer) {
+      // Цель - игрок
+      if (window.car && window.car.chassisBody) {
+        const playerPos = window.car.chassisBody.position;
+        const dist = this.position.distanceTo(playerPos);
+        if (dist < 80) { // Если цель в радиусе 80 метров, продолжаем преследование
+          this.target = playerPos.clone();
+          return;
+        }
+      }
+    } else if (this.targetBot && this.targetBot.controller && this.targetBot.controller.chassisBody) {
       const dist = this.position.distanceTo(this.targetBot.controller.chassisBody.position);
       if (dist < 80) { // Если цель в радиусе 80 метров, продолжаем преследование
         return;
@@ -159,8 +169,36 @@ export class Rocket {
     // Ищем новую цель
     let closestDist = Infinity;
     let closestBot = null;
+    let closestPlayer = false;
 
+    // Определяем, кто запустил ракету (через приблизительное сравнение позиции)
+    const launcherIsPlayer = window.car && this.position.distanceTo(window.car.chassisBody.position) < 5;
+    
+    // Проверяем игрока
+    if (window.car && window.car.chassisBody && !launcherIsPlayer) {
+      const playerPos = window.car.chassisBody.position;
+      const dist = this.position.distanceTo(playerPos);
+
+      const forward = this.direction.clone();
+      const toPlayer = new THREE.Vector3().subVectors(playerPos, this.position);
+      toPlayer.y = 0;
+      const dot = forward.dot(toPlayer.normalize());
+
+      // Проверяем игрока как потенциальную цель (только если ракета НЕ была запущена игроком)
+      if (dist < closestDist && (dot > 0.3 || dist < 40) && dist < 80) {
+        closestDist = dist;
+        closestPlayer = true;
+      }
+    }
+
+    // Проверяем ботов
     for (const bot of this.botManager.bots) {
+      // Пропускаем бота, который, возможно, запустил эту ракету (приблизительно)
+      const launcherIsThisBot = bot.controller && this.position.distanceTo(bot.controller.chassisBody.position) < 5;
+      if (launcherIsThisBot) {
+        continue;
+      }
+      
       if (!bot.controller || !bot.controller.chassisBody) continue;
       
       const botPos = bot.controller.chassisBody.position;
@@ -175,12 +213,18 @@ export class Rocket {
       if (dist < closestDist && (dot > 0.3 || dist < 40) && dist < 80) {
         closestDist = dist;
         closestBot = bot;
+        closestPlayer = false;
       }
     }
 
-    if (closestBot) {
+    if (closestPlayer) {
+      this.target = window.car.chassisBody.position.clone();
+      this.isTargetingPlayer = true;
+      this.targetBot = null;
+    } else if (closestBot) {
       this.target = closestBot.controller.chassisBody.position.clone();
       this.targetBot = closestBot;
+      this.isTargetingPlayer = false;
     }
   }
 
@@ -188,6 +232,7 @@ export class Rocket {
     console.log('Rocket hit!');
 
     if (this.targetBot && this.targetBot.controller) {
+      // Попали в бота
       const bot = this.targetBot;
       // Сбрасываем скорость бота
       bot.controller.chassisBody.velocity.set(0, 0, 0);

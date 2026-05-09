@@ -442,71 +442,9 @@ function createBoostZones(scene, segments, roadWidth) {
       }
     }
     
-    // Добавляем большие порталы/арки в начале и конце зоны бустера
-    const startIdx = bp.segmentIdx;
-    const endIdx = Math.min(bp.segmentIdx + bp.length, segments.length - 1);
-    
-    // Арка входа
-    createBoosterPortal(scene, segments[startIdx], halfW, 0x00ffff);
-    // Арка выхода
-    createBoosterPortal(scene, segments[endIdx], halfW, 0xff00ff);
   }
-  
-  return boosters;
-}
 
-/**
- * Создаёт портал/арку для зоны ускорения
- */
-function createBoosterPortal(scene, pos, halfW, color) {
-  const portalMat = new THREE.MeshBasicMaterial({
-    color: color,
-    transparent: true,
-    opacity: 0.15,
-    side: THREE.DoubleSide
-  });
-  const portalMatBright = new THREE.MeshBasicMaterial({
-    color: color,
-    transparent: true,
-    opacity: 0.4
-  });
-  
-  // Вертикальные стойки
-  const pillarHeight = 5;
-  const pillarGeo = new THREE.BoxGeometry(0.3, pillarHeight, 0.3);
-  
-  for (const side of [-1, 1]) {
-    const pillar = new THREE.Mesh(pillarGeo, portalMatBright);
-    pillar.position.set(
-      pos.x + side * halfW * 0.6,
-      pillarHeight / 2,
-      pos.z
-    );
-    scene.add(pillar);
-    
-    // Свечение вокруг стоек
-    const glowGeo = new THREE.BoxGeometry(0.6, pillarHeight, 0.6);
-    const glowMat = new THREE.MeshBasicMaterial({
-      color: color,
-      transparent: true,
-      opacity: 0.08
-    });
-    const glow = new THREE.Mesh(glowGeo, glowMat);
-    glow.position.copy(pillar.position);
-    scene.add(glow);
-  }
-  
-  // Верхняя перекладина
-  const topGeo = new THREE.BoxGeometry(halfW * 1.2, 0.3, 0.3);
-  const top = new THREE.Mesh(topGeo, portalMatBright);
-  top.position.set(pos.x, pillarHeight, pos.z);
-  scene.add(top);
-  
-  // Свечение портала (полупрозрачная плоскость)
-  const portalGeo = new THREE.PlaneGeometry(halfW * 1.4, pillarHeight * 1.2);
-  const portal = new THREE.Mesh(portalGeo, portalMat);
-  portal.position.set(pos.x, pillarHeight / 2, pos.z);
-  scene.add(portal);
+  return boosters;
 }
 
 function addRoadSegment(scene, a, b, width, mat) {

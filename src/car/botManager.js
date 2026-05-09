@@ -29,7 +29,8 @@ export class BotManager {
     
     this.botNames = [
       'AI-Racer', 'Speed-Bot', 'Turbo-X',
-      'Nitro-King', 'Drift-Master', 'Thunder'
+      'Nitro-King', 'Drift-Master', 'Thunder',
+      'Lightning', 'Storm-X' // Additional names for new bots
     ];
   }
 
@@ -111,8 +112,8 @@ export class BotManager {
     // AI контроллер с УНИКАЛЬНЫМ маршрутом
     const startCp = 0; // Уникальный маршрут уже начинается с нужной точки
     
-    // Создаём уникальный маршрут для каждого бота
-    const uniqueRoute = this._createBotRoute(index);
+    // Создаём УНИКАЛЬНЫЙ маршрут для каждого бота
+    const uniqueRoute = this._createUniqueRouteForBot(index);
     
     // console.log('Bot ' + index + ': spawn (' + startPos.x.toFixed(1) + ', ' + startPos.y.toFixed(1) + ', ' + startPos.z.toFixed(1) + '), target checkpoint ' + startCp);
     const bot = new BotController(
@@ -125,49 +126,56 @@ export class BotManager {
       index
     );
 
-    this.bots.push({ controller: bot, spawnPos: startPos, spawnRot: rotY, startCp, name: this.botNames[index % this.botNames.length] });
+    this.bots.push({ 
+      controller: bot, 
+      spawnPos: startPos, 
+      spawnRot: rotY, 
+      startCp, 
+      name: this.botNames[index % this.botNames.length],
+      items: [] // Initialize items array
+    });
   }
 
   /**
    * Создаёт УНИКАЛЬНЫЙ маршрут для каждого бота!
-   * Бот следует по последовательным чекпоинтам трассы, но с случайным смещением по полосе
-   * и случайным начальным индексом, чтобы боты были распределены по трассе.
+   * Бот следует по перемешанным чекпоинтам трассы с уникальной случайной последовательностью для каждого бота.
    */
-  _createBotRoute(botIndex) {
-    const uniqueRoute = [];
-    const numPoints = this.checkpoints.length;
+  _createUniqueRouteForBot(botIndex) {
+    // Копируем оригинальные чекпоинты
+    const originalCheckpoints = [...this.checkpoints];
     
-    // Начальное смещение для каждого бота (чтобы боты начинались в разных местах трассы)
-    const startOffset = (botIndex * 5) % numPoints;
+    // Перемешиваем чекпоинты с уникальным сидом для каждого бота
+    const shuffledCheckpoints = this._shuffleArray(originalCheckpoints, botIndex);
     
-    // Предпочтение полосы для каждого бота (-1: левая, 0: центр, 1: правая)
-    const lanePreference = (botIndex % 3) - 1;
-    const laneOffset = lanePreference * 2.5;
+    // Добавляем немного случайности в позициях чекпоинтов для большего разнообразия
+    const randomizedCheckpoints = shuffledCheckpoints.map(cp => {
+      const newCp = cp.clone();
+      // Небольшое смещение для создания разных путей
+      newCp.x += (Math.random() - 0.5) * 4;
+      newCp.z += (Math.random() - 0.5) * 4;
+      return newCp;
+    });
     
-    // Создаём маршрут, последовательно проходя все чекпоинты, начиная со startOffset
-    for (let i = 0; i < numPoints; i++) {
-      const cpIndex = (startOffset + i) % numPoints;
-      const baseCp = this.checkpoints[cpIndex];
-      
-      // Небольшое случайное смещение для естественного поведения
-      const randomOffset = Math.sin(i * 0.5 + botIndex * 1.7) * 1.0;
-      
-      // Вычисляем направление к следующей точке для определения перпендикуляра
-      const nextCpIndex = (cpIndex + 1) % numPoints;
-      const nextCp = this.checkpoints[nextCpIndex];
-      const dir = new THREE.Vector3().subVectors(nextCp, baseCp).normalize();
-      const perp = new THREE.Vector3(-dir.z, 0, dir.x);
-      
-      // Точка маршрута с смещением по полосе
-      uniqueRoute.push(new THREE.Vector3(
-        baseCp.x + perp.x * (laneOffset + randomOffset),
-        baseCp.y,
-        baseCp.z + perp.z * (laneOffset + randomOffset)
-      ));
+    return randomizedCheckpoints;
+  }
+  
+  /**
+   * Алгоритм Фишера-Йетса с сидом для перемешивания массива
+   */
+  _shuffleArray(array, seed) {
+    // Простой генератор псевдослучайных чисел с сидом
+    let randomSeed = seed * 9301 + 49297;
+    const pseudoRandom = () => {
+      randomSeed = (randomSeed * 1664525 + 1013904223) & 0x7fffffff;
+      return randomSeed / 0x7fffffff;
+    };
+    
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(pseudoRandom() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    
-    // console.log('Bot ' + botIndex + ': created sequential route with ' + uniqueRoute.length + ' points, start offset=' + startOffset);
-    return uniqueRoute;
+    return shuffled;
   }
 
   update(dt) {
@@ -180,9 +188,27 @@ export class BotManager {
     this.raceResults = []; // Сбрасываем результаты
     for (const bot of this.bots) {
       bot.controller.reset(bot.spawnPos, bot.spawnRot, bot.startCp);
+      // Clear bot's items when resetting
+      bot.items = [];
     }
   }
 
+  /**
+   * Проверяет, собрал ли какой-то бот предмет
+   */
+  checkItemCollection(itemPosition, itemType) {
+    for (const bot of this.bots) {
+      const botPos = bot.controller.chassisBody.position;
+      const distance = botPos.distanceTo(itemPosition);
+      
+      if (distance < 4.5) { // Same threshold as player
+        console.log(`${bot.name} detected item collection!`);
+        return bot; // Return the bot that is close to the item
+      }
+    }
+    return null;
+  }
+  
   /**
    * Получить текущие результаты гонки для таблицы лидеров
    * @param {number} playerTime - время игрока (0 если не финишировал)

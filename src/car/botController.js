@@ -1,4 +1,4 @@
-﻿import * as THREE from 'three';
+import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { CONFIG } from '../engine/config.js';
 
@@ -64,7 +64,6 @@ export class BotController {
       if (this.currentCheckpoint >= this.checkpoints.length) {
         this.currentCheckpoint = 0;
         this.lap++;
-        console.log(`🏁 Бот ${this.botIndex} завершил круг ${this.lap}!`);
       }
     }
 
@@ -215,6 +214,72 @@ export class BotController {
       const target = this.checkpoints[this.currentCheckpoint];
       console.log(`🤖 Бот ${this.botIndex}: скорость=${this.speed.toFixed(1)}км/ч, цель=[${target.x.toFixed(0)},${target.z.toFixed(0)}], дист=${distToTarget.toFixed(1)}, угол=${(angle*57).toFixed(0)}°`);
     }
+    
+    // --- 12. Использование предметов ---
+    this._handleItemUsage(dt);
+  }
+
+  /**
+   * Обработка использования предметов ботом
+   */
+  _handleItemUsage(dt) {
+    // Увеличиваем таймер
+    if (!this.itemUsageTimer) {
+      this.itemUsageTimer = 0;
+    }
+    
+    this.itemUsageTimer += dt;
+    
+    // Используем предмет каждые 8-15 секунд (случайное время)
+    if (this.itemUsageTimer > (8 + Math.random() * 7)) {
+      this._useItemStrategically();
+      this.itemUsageTimer = 0;
+    }
+  }
+
+  /**
+   * Стратегическое использование предметов
+   */
+  _useItemStrategically() {
+    // Find a ready item in the bot's inventory
+    if (!window.itemSystem) {
+      return;
+    }
+
+    // Get the bot object from the bot manager to access its items
+    if (!window.botManager || !window.botManager.bots) {
+      return;
+    }
+
+    // Find the current bot in the bots array
+    const botObj = window.botManager.bots.find(b => b.controller === this);
+    if (!botObj || !botObj.items || botObj.items.length === 0) {
+      return;
+    }
+
+    // Find the first ready item (after cooldown)
+    const now = Date.now();
+    const readyItem = botObj.items.find(item => {
+      if (!item.ready && now - item.time >= 2000) { // 2-second cooldown
+        item.ready = true;
+      }
+      return item.ready;
+    });
+
+    if (!readyItem) {
+      // No ready items yet, just return
+      return;
+    }
+
+    // Remove the item from the bot's inventory
+    const idx = botObj.items.indexOf(readyItem);
+    if (idx !== -1) {
+      botObj.items.splice(idx, 1);
+    }
+
+    // Apply the item effect to the bot
+    const result = window.itemSystem.applyItemEffectToBot(readyItem.type, this);
+    console.log(`Бот ${this.botIndex}: ${result.message}`);
   }
 
   _unstuck() {

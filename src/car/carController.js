@@ -111,6 +111,39 @@ export class CarController {
       this.chassisBody.angularVelocity.x *= (1 - stabilizer / 100);
       this.chassisBody.angularVelocity.z *= (1 - stabilizer / 100);
     }
+    
+    // --- Скольжение вдоль стен ---
+    // Определяем боковую скорость (скорость перпендикулярно направлению движения)
+    const forward = new THREE.Vector3(0, 0, 1);
+    forward.applyQuaternion(this.mesh.quaternion);
+    
+    const velocity = new THREE.Vector3(
+      this.chassisBody.velocity.x,
+      0,
+      this.chassisBody.velocity.z
+    );
+    
+    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+    const sidewaysSpeed = velocity.dot(right);
+    
+    // Если машина быстро движется боком (например, скользит по стене), 
+    // применяем специальную физику для скольжения
+    if (Math.abs(sidewaysSpeed) > 15 && this.speed > 10) {
+      // Уменьшаем трение при скольжении вдоль стены
+      this.chassisBody.linearDamping = 0.05; // немного больше чем при обычном движении
+      
+      // Уменьшаем влияние боковой силы на общую скорость
+      const forwardSpeed = velocity.dot(forward);
+      
+      // Корректируем боковую силу, позволяя скольжению
+      const correctedVelocity = forward.clone().multiplyScalar(forwardSpeed).add(
+        right.clone().multiplyScalar(sidewaysSpeed * 0.9) // уменьшаем боковое трение
+      );
+      
+      // Применяем корректировку к скорости, но плавно
+      this.chassisBody.velocity.x = this.chassisBody.velocity.x * 0.95 + correctedVelocity.x * 0.05;
+      this.chassisBody.velocity.z = this.chassisBody.velocity.z * 0.95 + correctedVelocity.z * 0.05;
+    }
 
     // --- Синхронизация визуала ---
     this.mesh.position.copy(this.chassisBody.position);
