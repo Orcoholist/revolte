@@ -240,13 +240,10 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
 
   // Показать мобильные контролы, если это мобильное устройство
   const mobileControls = document.getElementById('mobile-controls');
-  const controlsHint = document.getElementById('controls-hint');
 
   if (isMobileDevice()) {
     // Показываем мобильные контролы
     mobileControls.style.display = 'block';
-    // Скрываем десктопные подсказки
-    controlsHint.style.display = 'none';
     
     // Добавляем обработчики для мобильных кнопок
     const btnLeft = document.getElementById('btn-left');
@@ -311,6 +308,28 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
     e.preventDefault();
     if (window.state.isPlaying) window.car.flipOver();
   }, { passive: false });
+
+  // Обработчик нажатия на индикатор предмета (использование итема на мобильных)
+  const itemIndicator = document.getElementById('item-indicator');
+  itemIndicator.addEventListener('click', () => {
+    if (window.state.isPlaying && window.itemSystem && window.car) {
+      const itemType = window.itemSystem.useItem();
+      if (itemType) {
+        const result = window.itemSystem.applyItemEffect(itemType, window.car);
+        console.log(result.message);
+      }
+    }
+  });
+  itemIndicator.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (window.state.isPlaying && window.itemSystem && window.car) {
+      const itemType = window.itemSystem.useItem();
+      if (itemType) {
+        const result = window.itemSystem.applyItemEffect(itemType, window.car);
+        console.log(result.message);
+      }
+    }
+  }, { passive: false });
 });
 
 // ==================== КАМЕРА ====================
@@ -353,20 +372,10 @@ document.addEventListener('keydown', (e) => {
       if (itemType) {
         const result = window.itemSystem.applyItemEffect(itemType, window.car);
         console.log(result.message);
-        // Уведомление при использовании предмета убрано
       }
     }
   }
 });
-
-// Кнопка на экране
-flipBtn.addEventListener('click', () => {
-  if (window.state.isPlaying) window.car.flipOver();
-});
-flipBtn.addEventListener('touchstart', (e) => {
-  e.preventDefault();
-  if (window.state.isPlaying) window.car.flipOver();
-}, { passive: false });
 
 // ==================== ПРОВЕРКА СТОЛКНОВЕНИЙ С ПРЕПЯТСТВИЯМИ ====================
 
@@ -486,7 +495,7 @@ function animate() {
     if (window.lapCounter) {
       window.lapCounter.update(window.car.mesh.position);
       
-      // Передаём следующую контрольную точку для миникарты
+      // Передаём следующую контрольную точку для стрелки направления
       window.car.mesh.userData.nextCheckpoint = window.lapCounter.getNextCheckpoint();
     }
 

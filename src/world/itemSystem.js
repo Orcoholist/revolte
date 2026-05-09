@@ -590,17 +590,7 @@ export class ItemSystem {
   }
   
   _showCollectNotification(type) {
-    const notification = document.createElement('div');
-    notification.className = 'item-toast';
-    const colorHex = '#' + itemColors[type].toString(16).padStart(6, '0');
-    notification.style.borderColor = colorHex;
-    notification.style.boxShadow = `0 0 20px ${colorHex}40`;
-    notification.textContent = itemIcons[type] + ' ' + itemNames[type];
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-      notification.remove();
-    }, 1200);
+    // Уведомление убрано — предмет отображается в индикаторе
   }
   
   /**
@@ -676,17 +666,7 @@ export class ItemSystem {
   }
   
   _showItemReadyNotification(type) {
-    const notification = document.createElement('div');
-    notification.className = 'item-toast';
-    const colorHex = '#' + itemColors[type].toString(16).padStart(6, '0');
-    notification.style.borderColor = colorHex;
-    notification.style.boxShadow = `0 0 20px ${colorHex}40`;
-    notification.textContent = itemIcons[type] + ' ' + itemNames[type] + ' готов! Нажми Ctrl';
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-      notification.remove();
-    }, 1200);
+    // Уведомление убрано — готовность отображается в индикаторе (подсветка)
   }
   
   /**
