@@ -129,6 +129,12 @@ export function createCarPhysics(world, wheelMat) {
   wheelOptions.chassisConnectionPointLocal.set(-axleW, connY, rearZ);
   vehicle.addWheel(wheelOptions);
 
+  // В cannon-es v0.20.0 RaycastVehicle сам добавляет listener
+  // `preStep` при `addWheel`, но в нашей версии не удаляется при
+  // удалении тела. Вместо того чтобы использовать внутренний `_update`
+  // (который может отсутствовать в некоторых сборках) просто
+  // добавляем саму транспортную машину в world, а обработчик будет
+  // управляться библиотекой.
   vehicle.addToWorld(world);
 
   return { chassisBody, vehicle };

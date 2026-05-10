@@ -4,7 +4,8 @@ import { CONFIG } from './config.js';
 export function createPhysicsWorld() {
   const world = new CANNON.World();
   world.gravity.set(0, CONFIG.physics.gravity, 0);
-  world.broadphase = new CANNON.SAPBroadphase(world);
+  // Используем NaiveBroadphase для совместимости с cannon-es v0.20
+  world.broadphase = new CANNON.NaiveBroadphase();
   world.solver.iterations = 10;
 
   // Материалы
@@ -19,13 +20,8 @@ export function createPhysicsWorld() {
   });
   world.addContactMaterial(contactMat);
 
-  // Физическая плоскость на высоте трассы (y=0)
-  // Если трасса имеет рельеф, нужно извлечь её геометрию для физики
-  const groundBody = new CANNON.Body({ mass: 0, material: groundMat });
-  groundBody.addShape(new CANNON.Plane());
-  groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-  groundBody.position.set(0, 0, 0); // высота поверхности трассы
-  world.addBody(groundBody);
+  // Ground body удалён - используем slabs из track.js для коллизии с землёй
+  // Это решает проблему с внутренней ошибкой cannon-es в RaycastVehicle
 
   return { world, groundMat, wheelMat };
 }

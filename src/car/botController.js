@@ -50,6 +50,35 @@ export class BotController {
       return;
     }
 
+    // Проверка оглушения (масло)
+    if (this.isStunned && Date.now() > this.stunEndTime) {
+      this.isStunned = false;
+    }
+    if (this.isStunned) {
+      // Отключаем двигатель, машина катится
+      this.vehicle.applyEngineForce(0, 2);
+      this.vehicle.applyEngineForce(0, 3);
+      this.vehicle.setBrake(0, 0);
+      this.vehicle.setBrake(0, 1);
+      this.vehicle.setBrake(0, 2);
+      this.vehicle.setBrake(0, 3);
+      
+      // Синхронизация визуала
+      this.mesh.position.copy(this.chassisBody.position);
+      this.mesh.quaternion.copy(this.chassisBody.quaternion);
+      if (this.wheelMeshes && this.wheelMeshes.length > 0) {
+        for (let i = 0; i < 4; i++) {
+          this.vehicle.updateWheelTransform(i);
+          const t = this.vehicle.wheelInfos[i].worldTransform;
+          this.wheelMeshes[i].position.copy(t.position);
+          this.wheelMeshes[i].quaternion.copy(t.quaternion);
+        }
+      }
+      const v = this.chassisBody.velocity;
+      this.speed = Math.sqrt(v.x * v.x + v.z * v.z) * 3.6;
+      return;
+    }
+
     // --- 1. Цель — ТЕКУЩИЙ чекпоинт (к которому едем) ---
     const target = this.checkpoints[this.currentCheckpoint];
 
@@ -347,6 +376,15 @@ export class BotController {
     return false;
   }
   
+  /**
+   * Оглушение (масляное пятно) — бот теряет управление на duration мс
+   */
+  stun(duration) {
+    this.isStunned = true;
+    this.stunEndTime = Date.now() + duration;
+    console.log('🤖 Bot stunned for ' + duration + 'ms');
+  }
+
   /**
    * Apply boost to the bot
    */

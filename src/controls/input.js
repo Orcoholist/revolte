@@ -67,7 +67,6 @@ export class InputManager {
       'btn-brake': 'brake',
       'btn-left': 'left',
       'btn-right': 'right',
-      'btn-reverse': 'reverse'  // Adding reverse button
     };
 
     for (const [id, key] of Object.entries(btns)) {
@@ -87,52 +86,50 @@ export class InputManager {
       }, { passive: false });
     }
 
-    // Keep the item usage functionality as a separate touch handler on the same button
+    // btn-reverse: reverse пока зажата, долгое нажатие (500ms) — использовать предмет
     const itemBtn = document.getElementById('btn-reverse');
     if (itemBtn) {
-      // Add a long press or double tap to use item, while short tap remains for reverse
       let pressTimer = null;
       
       itemBtn.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        this._mobile.reverse = true;
+        this._syncMobile();
         pressTimer = window.setTimeout(() => {
-          // Long press - use item
-          if (!this._mobile.useItemPressed) {
-            this._mobile.useItemPressed = true;
-            this._fireUseItem();
-          }
+          // Long press — use item
+          this._mobile.useItemPressed = true;
+          this._fireUseItem();
           pressTimer = null;
-        }, 500); // 500ms for long press
+        }, 500);
       }, { passive: false });
 
       itemBtn.addEventListener('touchend', (e) => {
         e.preventDefault();
-        // Short press - cancel long press and trigger reverse
         if (pressTimer) {
           clearTimeout(pressTimer);
-          // Trigger reverse movement
-          this._mobile.reverse = true;
-          this._syncMobile();
+          pressTimer = null;
         }
+        this._mobile.reverse = false;
         this._mobile.useItemPressed = false;
+        this._syncMobile();
       }, { passive: false });
       
-      // Also handle touch cancel events
       itemBtn.addEventListener('touchcancel', (e) => {
         e.preventDefault();
         if (pressTimer) {
           clearTimeout(pressTimer);
+          pressTimer = null;
         }
         this._mobile.reverse = false;
-        this._syncMobile();
         this._mobile.useItemPressed = false;
+        this._syncMobile();
       }, { passive: false });
     }
   }
 
   _syncMobile() {
     this.state.forward = this._mobile.gas;
-    this.state.backward = false;
+    this.state.backward = this._mobile.reverse;
     this.state.left = this._mobile.left;
     this.state.right = this._mobile.right;
     this.state.brake = this._mobile.brake;

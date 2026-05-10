@@ -14,13 +14,13 @@ export const CONFIG = {
   },
   physics: {
     gravity: -9.82,
-    substeps: 10,
+    substeps: 5,
     friction: 0.6,
     restitution: 0.1
   },
   world: {
-    size: 600,
-    trackWidth: 16
+    size: 500,
+    trackWidth: 20
   },
   colors: {
     sky: 0x87CEEB,
@@ -36,8 +36,8 @@ export const CONFIG = {
     }
   },
   camera: {
-    height: 6,
-    distance: 14,
+    height: 4,
+    distance: 9,
     lerpSpeed: 0.08,
     speedZoomFactor: 0.4
   }

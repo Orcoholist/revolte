@@ -89,7 +89,7 @@ export class Mine {
     // Check if car has active shield
     if (car.hasActiveShield) {
       if (typeof car.hasActiveShield === 'function' && car.hasActiveShield()) {
-        console.log('Mine blocked by shield!');
+        
         return false; // Don't trigger explosion if shield is active
       }
     }

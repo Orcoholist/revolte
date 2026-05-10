@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Rocket } from './rocket.js';
 import { Mine } from './mine.js';
+import { Oil } from './oil.js';
+import { Ball } from './ball.js';
 
 /**
  * Система предметов на трассе (как в Revolt!)
@@ -223,34 +225,35 @@ export class ItemSystem {
     this.maxPlayerItems = 2; // Максимум 2 предмета у игрока
     
     // Спавн предметов на трассе
-    this.spawnInterval = 5000; // Каждые 5 секунд
+    this.spawnInterval = 800; // Каждые 0.8 секунды
     this.lastSpawnTime = 0;
-    this.maxTrackItems = 12; // Максимум 12 предметов на трассе
+    this.maxTrackItems = 60; // Максимум 60 предметов на трассе
     
     // Активные ракеты
     this.activeRockets = [];
 
     // Активные мины
     this.activeMines = [];
+
+    // Активные масляные пятна
+    this.activeOils = [];
+
+    // Активные шары
+    this.activeBalls = [];
   }
 
   /**
-   * Спавн случайного предмета в случайной позиции
+   * Спавн случайного предмета в случайной позиции на всей карте
    */
   spawnItem(trackSegments) {
     if (this.trackItems.length >= this.maxTrackItems) return;
-    if (!trackSegments || trackSegments.length === 0) return;
     
-    // Случайная позиция на трассе
-    const idx = Math.floor(Math.random() * trackSegments.length);
-    const pos = trackSegments[idx].clone();
-    
-    // Случайное смещение по ширине трассы
-    const nextIdx = (idx + 1) % trackSegments.length;
-    const dir = new THREE.Vector3().subVectors(trackSegments[nextIdx], pos).normalize();
-    const perp = new THREE.Vector3(-dir.z, 0, dir.x);
-    const offset = (Math.random() - 0.5) * 5;
-    pos.add(perp.multiplyScalar(offset));
+    // Случайная позиция по всей карте 600x600
+    const pos = new THREE.Vector3(
+      (Math.random() - 0.5) * 280,
+      0,
+      (Math.random() - 0.5) * 280
+    );
     
     // Случайный тип предмета
     const types = Object.values(ItemType);
@@ -344,10 +347,12 @@ export class ItemSystem {
    * Обновление системы
    */
   update(dt, trackSegments) {
-    // Спавн новых предметов
+    // Спавн новых предметов — по 3 за раз для быстрого заполнения
     const now = Date.now();
     if (now - this.lastSpawnTime > this.spawnInterval) {
-      this.spawnItem(trackSegments);
+      for (let i = 0; i < 3; i++) {
+        this.spawnItem(trackSegments);
+      }
       this.lastSpawnTime = now;
     }
     
@@ -374,6 +379,24 @@ export class ItemSystem {
       const shouldRemove = mine.update(dt);
       if (shouldRemove) {
         this.activeMines.splice(i, 1);
+      }
+    }
+    
+    // Обновление масляных пятен
+    for (let i = this.activeOils.length - 1; i >= 0; i--) {
+      const oil = this.activeOils[i];
+      const shouldRemove = oil.update(dt);
+      if (shouldRemove) {
+        this.activeOils.splice(i, 1);
+      }
+    }
+    
+    // Обновление шаров
+    for (let i = this.activeBalls.length - 1; i >= 0; i--) {
+      const ball = this.activeBalls[i];
+      const shouldRemove = ball.update(dt);
+      if (shouldRemove) {
+        this.activeBalls.splice(i, 1);
       }
     }
     
@@ -470,13 +493,24 @@ export class ItemSystem {
         return { success: true, message: 'Ускорение!' };
         
       case ItemType.SUPERBOOST:
-        // Супер ускорение
-        car.applyBoost(2.5, 2000);
+        // Шар — появляется за машиной и катится в том же направлении
+        const ballBackward = new THREE.Vector3(0, 0, 1);
+        ballBackward.applyQuaternion(car.mesh.quaternion);
+        const ballPos = car.mesh.position.clone().add(ballBackward.multiplyScalar(4));
+        ballPos.y = 0;
+        
+        // Направление движения шара — туда же, куда едет игрок
+        const ballDir = new THREE.Vector3(0, 0, -1);
+        ballDir.applyQuaternion(car.mesh.quaternion);
+        
+        const ball = new Ball(ballPos, ballDir, this.scene);
+        this.activeBalls.push(ball);
+        
         // Визуальный эффект
         if (window.createItemEffect) {
           window.createItemEffect('superboost', car.mesh);
         }
-        return { success: true, message: 'СУПЕР УСКОРЕНИЕ!' };
+        return { success: true, message: 'Шар выпущен!' };
         
       case ItemType.SHIELD:
         // Щит на время
@@ -518,7 +552,14 @@ export class ItemSystem {
         return { success: true, message: 'Мина установлена!' };
         
       case ItemType.OIL:
-        // Масляное пятно
+        // Масляное пятно позади машины
+        const oilBackward = new THREE.Vector3(0, 0, 1);
+        oilBackward.applyQuaternion(car.mesh.quaternion);
+        const oilPos = car.mesh.position.clone().add(oilBackward.multiplyScalar(3));
+        
+        const oil = new Oil(oilPos, this.scene);
+        this.activeOils.push(oil);
+        
         // Визуальный эффект
         if (window.createItemEffect) {
           window.createItemEffect('oil', car.mesh);
@@ -545,13 +586,23 @@ export class ItemSystem {
         return { success: true, message: 'Бот получил ускорение!' };
         
       case ItemType.SUPERBOOST:
-        // Супер ускорение
-        bot.applyBoost(2.5, 2000);
+        // Шар — появляется за ботом и катится в том же направлении
+        const ballBackward = new THREE.Vector3(0, 0, 1);
+        ballBackward.applyQuaternion(bot.mesh.quaternion);
+        const ballPos = bot.mesh.position.clone().add(ballBackward.multiplyScalar(4));
+        ballPos.y = 0;
+        
+        const ballDir = new THREE.Vector3(0, 0, -1);
+        ballDir.applyQuaternion(bot.mesh.quaternion);
+        
+        const ball = new Ball(ballPos, ballDir, this.scene);
+        this.activeBalls.push(ball);
+        
         // Визуальный эффект
         if (window.createItemEffect) {
           window.createItemEffect('superboost', bot.mesh);
         }
-        return { success: true, message: 'Бот получил супер-ускорение!' };
+        return { success: true, message: 'Бот выпустил шар!' };
         
       case ItemType.SHIELD:
         // Щит на время
@@ -598,15 +649,14 @@ export class ItemSystem {
         const oilBackward = new THREE.Vector3(0, 0, 1);
         oilBackward.applyQuaternion(bot.mesh.quaternion);
         const oilPos = bot.mesh.position.clone().add(oilBackward.multiplyScalar(2));
-        oilPos.y = 0.1;
-
+        
+        const oil = new Oil(oilPos, this.scene);
+        this.activeOils.push(oil);
+        
         // Визуальный эффект
         if (window.createItemEffect) {
           window.createItemEffect('oil', bot.mesh);
         }
-        
-        // Масляное пятно влияет на других участников
-        // Реализуется в основной логике игры
         return { success: true, message: 'Бот оставил масляное пятно!' };
         
       default:
@@ -627,6 +677,14 @@ export class ItemSystem {
     // Удаляем все активные мины
     this.activeMines.forEach(mine => mine.destroy());
     this.activeMines = [];
+
+    // Удаляем все масляные пятна
+    this.activeOils.forEach(oil => oil.destroy());
+    this.activeOils = [];
+
+    // Удаляем все шары
+    this.activeBalls.forEach(ball => ball.destroy());
+    this.activeBalls = [];
   }
 
   /**
@@ -638,6 +696,33 @@ export class ItemSystem {
       if (mine.checkCollision(car)) {
         mine.explode();
         this.activeMines.splice(i, 1);
+        if (onHit) onHit();
+      }
+    }
+  }
+
+  /**
+   * Проверка столкновений с масляными пятнами
+   */
+  checkOilCollisions(car, onHit = null) {
+    for (let i = this.activeOils.length - 1; i >= 0; i--) {
+      const oil = this.activeOils[i];
+      if (oil.checkCollision(car)) {
+        if (onHit) onHit(oil);
+      }
+    }
+  }
+
+  /**
+   * Проверка столкновений с шарами
+   */
+  checkBallCollisions(car, onHit = null) {
+    for (let i = this.activeBalls.length - 1; i >= 0; i--) {
+      const ball = this.activeBalls[i];
+      if (ball.checkCollision(car)) {
+        ball.hitCar(car);
+        ball.destroy();
+        this.activeBalls.splice(i, 1);
         if (onHit) onHit();
       }
     }

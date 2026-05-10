@@ -25,6 +25,14 @@ export class CarController {
     this.onLoop = false;
     this.onRamp = false;
     
+    // Буст
+    this.boostMultiplier = 1.0;
+    this.boostEndTime = 0;
+    
+    // Оглушение (масло)
+    this.isStunned = false;
+    this.stunEndTime = 0;
+    
     // Для определения элементов трассы
     this.trackElementCheckInterval = 100; // проверка каждые 100мс
     this.lastTrackCheckTime = 0;
@@ -35,6 +43,70 @@ export class CarController {
    */
   update() {
     const cfg = CONFIG.car;
+
+    // --- Проверка состояния буста ---
+    if (Date.now() > this.boostEndTime) {
+      this.boostMultiplier = 1.0;
+    }
+
+    // --- Проверка состояния оглушения ---
+    if (this.isStunned && Date.now() > this.stunEndTime) {
+      this.isStunned = false;
+      this.stunEndTime = 0;
+    }
+
+    // Если оглушён — игнорируем ввод, машина просто катится
+    if (this.isStunned) {
+      this.vehicle.applyEngineForce(0, 2);
+      this.vehicle.applyEngineForce(0, 3);
+      this.vehicle.setBrake(0, 0);
+      this.vehicle.setBrake(0, 1);
+      this.vehicle.setBrake(0, 2);
+      this.vehicle.setBrake(0, 3);
+      this.chassisBody.linearDamping = 0.05;
+      this.chassisBody.angularDamping = 0.1;
+
+      // --- Поворот (передние колёса 0, 1) с инерцией ---
+      let targetSteer = 0;
+      if (this.input.left) targetSteer = -cfg.maxSteer;
+      if (this.input.right) targetSteer = cfg.maxSteer;
+      
+      // Плавный переход к целевому углу поворота
+      if (this.currentSteer < targetSteer) {
+        this.currentSteer = Math.min(targetSteer, this.currentSteer + this.steerSpeed);
+      } else if (this.currentSteer > targetSteer) {
+        this.currentSteer = Math.max(targetSteer, this.currentSteer - this.steerSpeed);
+      } else {
+        this.currentSteer = targetSteer;
+      }
+
+      this.vehicle.setSteeringValue(this.currentSteer, 0);
+      this.vehicle.setSteeringValue(this.currentSteer, 1);
+
+      // --- Стабилизация ---
+      const currentAngVelX = Math.abs(this.chassisBody.angularVelocity.x);
+      const currentAngVelZ = Math.abs(this.chassisBody.angularVelocity.z);
+      const stabilizer = Math.min(25, (currentAngVelX + currentAngVelZ) * 4);
+      if (this.speed > 5) {
+        this.chassisBody.angularVelocity.x *= (1 - stabilizer / 100);
+        this.chassisBody.angularVelocity.z *= (1 - stabilizer / 100);
+      }
+
+      // --- Синхронизация визуала ---
+      this.mesh.position.copy(this.chassisBody.position);
+      this.mesh.quaternion.copy(this.chassisBody.quaternion);
+      if (this.wheelMeshes && this.wheelMeshes.length > 0) {
+        for (let i = 0; i < 4; i++) {
+          this.vehicle.updateWheelTransform(i);
+          const t = this.vehicle.wheelInfos[i].worldTransform;
+          this.wheelMeshes[i].position.copy(t.position);
+          this.wheelMeshes[i].quaternion.copy(t.quaternion);
+        }
+      }
+      const v = this.chassisBody.velocity;
+      this.speed = Math.sqrt(v.x * v.x + v.z * v.z) * 1.0;
+      return;
+    }
 
     // --- Тормоз (ПЕРВООЧЕРЕДНОЕ действие) ---
     if (this.input.brake) {
@@ -67,8 +139,8 @@ export class CarController {
     } else {
       // --- Сила двигателя (задний привод: колёса 2, 3) ---
       let engineForce = 0;
-      if (this.input.forward) engineForce = cfg.engineForce;
-      if (this.input.backward) engineForce = -cfg.engineForce;
+      if (this.input.forward) engineForce = cfg.engineForce * this.boostMultiplier;
+      if (this.input.backward) engineForce = -cfg.engineForce * this.boostMultiplier;
 
       this.vehicle.applyEngineForce(engineForce, 2);
       this.vehicle.applyEngineForce(engineForce, 3);
@@ -184,35 +256,32 @@ export class CarController {
 
   /**
    * Применяет временное ускорение (предмет boost/superboost)
+   * Устанавливает множитель силы на duration миллисекунд.
    * @param {number} multiplier - множитель силы двигателя (1.5, 2.5 и т.д.)
    * @param {number} duration - длительность в миллисекундах
    */
   applyBoost(multiplier, duration) {
-    const cfg = CONFIG.car;
-    const boostedForce = cfg.engineForce * multiplier;
-    
-    // Store original state to restore later
-    this.originalInputState = {...this.input};
-    
-    // Apply the boost force directly
-    this.vehicle.applyEngineForce(boostedForce, 2);
-    this.vehicle.applyEngineForce(boostedForce, 3);
-    
-    // Clear any previously scheduled restoration
-    if (this.boostTimeoutId) {
-      clearTimeout(this.boostTimeoutId);
-    }
-    
-    // Schedule restoration of original state
-    this.boostTimeoutId = setTimeout(() => {
-      // Restore original input state if not currently active
-      if (!this.input.forward && !this.input.backward) {
-        this.vehicle.applyEngineForce(0, 2);
-        this.vehicle.applyEngineForce(0, 3);
-      }
-    }, duration);
-    
+    this.boostMultiplier = multiplier;
+    this.boostEndTime = Date.now() + duration;
     console.log('Boost applied: ' + multiplier + 'x for ' + duration + 'ms');
+  }
+
+  /**
+   * Оглушает машину (масляное пятно) — теряет управление на duration мс
+   * @param {number} duration - длительность в миллисекундах
+   */
+  stun(duration) {
+    this.isStunned = true;
+    this.stunEndTime = Date.now() + duration;
+    console.log('Car stunned for ' + duration + 'ms');
+  }
+
+  /**
+   * Снимает оглушение
+   */
+  unstun() {
+    this.isStunned = false;
+    this.stunEndTime = 0;
   }
 
   /**
@@ -220,7 +289,10 @@ export class CarController {
    * rotY — поворот вокруг Y в радианах (по умолчанию 0 = смотрит вдоль +Z)
    */
   reset(pos, rotY = 0) {
-    this.chassisBody.position.set(pos.x, 1.5, pos.z);
+    // При спавне позиция может иметь y=0.5, но физика требует
+    // высоты над землёй для корректного размещения тела.
+    const y = typeof pos.y === 'number' ? pos.y + 1.5 : 1.5;
+    this.chassisBody.position.set(pos.x, y, pos.z);
     // Поворот шасси: по умолчанию "вперёд" = +Z (Cannon forwardAxis=2)
     // rotY=-PI/2 → смотрит вдоль +X
     this.chassisBody.quaternion.setFromEuler(0, rotY, 0);

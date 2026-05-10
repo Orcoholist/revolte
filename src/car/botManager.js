@@ -35,18 +35,16 @@ export class BotManager {
   }
 
   /**
-   * Создаёт равномерно распределённые чекпоинты по трассе.
+   * Создаёт хаотичные чекпоинты по всей карте.
    */
   _createCheckpoints(count) {
-    if (!this.trackSegments || this.trackSegments.length === 0) {
-      console.error('trackSegments пуст! Боты не будут работать.');
-      return [];
-    }
     const cps = [];
-    const step = Math.floor(this.trackSegments.length / count);
     for (let i = 0; i < count; i++) {
-      const idx = (i * step) % this.trackSegments.length;
-      const cp = this.trackSegments[idx].clone();
+      const cp = new THREE.Vector3(
+        (Math.random() - 0.5) * 240,
+        0,
+        (Math.random() - 0.5) * 240
+      );
       cps.push(cp);
     }
     return cps;
@@ -66,12 +64,26 @@ export class BotManager {
    */
   spawnBots(count) {
     for (let i = 0; i < count; i++) {
-      this._createBot(i);
+      this._createBot(i, count);
     }
     // console.log('Created ' + count + ' bots with UNIQUE routes');
   }
 
-  _createBot(index) {
+  /**
+   * Возвращает позицию спауна бота на краю арены, распределённую симметрично.
+   * angle рассчитывается исходя из индекса бота и общего количества, радиус – фиксированный.
+   */
+  _getEdgeSpawnPosition(index, total) {
+    const angle = (index / total) * Math.PI * 2; // равномерно по окружности
+    const radius = 30; // расстояние от центра к краю арены (можно подстроить)
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    // y берём из первой точки трассы + небольшая надбавка
+    const baseY = this.trackSegments.length > 0 ? this.trackSegments[0].y : 0;
+    return new THREE.Vector3(x, baseY + 1.5, z);
+  }
+
+  _createBot(index, total) {
     // Визуал: реколор модели игрока с уникальным цветом
     const botColor = this.botColors[index % this.botColors.length];
     const carMesh = createCarMesh();
@@ -87,24 +99,12 @@ export class BotManager {
     // Физика
     const { chassisBody, vehicle } = createCarPhysics(this.world, this.wheelMat);
 
-    // Случайная стартовая позиция на трассе
-    const segIdx = Math.floor(Math.random() * this.trackSegments.length);
-    const seg = this.trackSegments[segIdx];
-    const nextSeg = this.trackSegments[(segIdx + 1) % this.trackSegments.length];
+    // Позиция спауна бота на краю арены (симметрично)
+    const startPos = this._getEdgeSpawnPosition(index, total);
 
-    // Позиция между двумя сегментами + случайный отступ в сторону
-    const dir = new THREE.Vector3().subVectors(nextSeg, seg).normalize();
-    const perp = new THREE.Vector3(-dir.z, 0, dir.x);
-    const laneOffset = (Math.random() - 0.5) * 6; // случайная полоса
-
-    const startPos = new THREE.Vector3()
-      .addVectors(seg, nextSeg)
-      .multiplyScalar(0.5)
-      .add(perp.clone().multiplyScalar(laneOffset));
-    startPos.y = seg.y + 1.5; // ВЫСОТА ТРАССЫ + 1.5
-
-    // Поворот вдоль трассы
-    const rotY = Math.atan2(dir.x, dir.z);
+    // Поворот бота – направлен к центру арены
+    const dirToCenter = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), startPos).normalize();
+    const rotY = Math.atan2(dirToCenter.x, dirToCenter.z);
 
     chassisBody.position.set(startPos.x, startPos.y, startPos.z);
     chassisBody.quaternion.setFromEuler(0, rotY, 0);
@@ -180,10 +180,14 @@ export class BotManager {
 
   update(dt) {
     for (const bot of this.bots) {
-      bot.controller.update(dt);
+      if (bot.controller && bot.controller.chassisBody && bot.controller.vehicle) {
+        bot.controller.update(dt);
+      } else {
+        console.warn('Invalid bot controller detected');
+      }
     }
   }
-
+      
   reset() {
     this.raceResults = []; // Сбрасываем результаты
     for (const bot of this.bots) {

@@ -96,12 +96,12 @@ function restartRace() {
   window.state.lap = 1;
   window.state.startTime = Date.now();
   window.lapCounter.reset();
-  window.car.reset(track.spawnPos, track.spawnRot);
+  window.car.reset(track.spawnPos, track.spawnRot.y);
   window.botManager.reset();
   if (window.itemSystem) {
     window.itemSystem.clear();
-    // Spawn 18 items instead of maxTrackItems for more variety on the map
-    for (let i = 0; i < 18; i++) {
+    // Spawn 60 items on the expanded map
+    for (let i = 0; i < 60; i++) {
       window.itemSystem.spawnItem(track.segments);
     }
   }
@@ -151,7 +151,7 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
 
   const { chassisBody, vehicle } = createCarPhysics(world, wheelMat);
   window.car = new CarController(chassisBody, vehicle, carMesh, wheelMeshes);
-  window.car.reset(track.spawnPos, track.spawnRot);
+  window.car.reset(track.spawnPos, track.spawnRot.y);
 
   // Создаём AI-ботов (случайные позиции на трассе, свои чекпоинты)
   window.botManager = new BotManager(scene, world, wheelMat, track.segments);
@@ -161,8 +161,8 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
   window.itemSystem = new ItemSystem(scene);
   // Создаём пул эффектов для оптимизации
   window.effectsPool = new EffectsPool(scene);
-  // Спавним больше предметов (увеличено с 6 до 12)
-  for (let i = 0; i < 12; i++) {
+  // Спавним максимальное количество предметов сразу
+  for (let i = 0; i < 60; i++) {
     window.itemSystem.spawnItem(track.segments);
   }
 
@@ -393,6 +393,20 @@ function checkObstacleCollisions(carPos) {
       obstacle.position.add(impactDir.multiplyScalar(0.5));
       obstacle.rotation.y += 0.2;
       
+      // Отталкивающий импульс для машины — разная сила для разных препятствий
+      if (window.car && window.car.chassisBody) {
+        let pushForce = 8; // по умолчанию слабый толчок
+        const type = obstacle.userData && obstacle.userData.type;
+        if (type === 'container') pushForce = 12; // контейнеры — средний толчок
+        else if (type === 'barrel') pushForce = 6;  // бочки — слабый толчок
+        else if (type === 'crate') pushForce = 10;  // ящики — чуть сильнее бочек
+        
+        window.car.chassisBody.velocity.x += impactDir.x * pushForce;
+        window.car.chassisBody.velocity.z += impactDir.z * pushForce;
+        // Небольшой подброс вверх
+        window.car.chassisBody.velocity.y = Math.max(window.car.chassisBody.velocity.y, 2);
+      }
+      
       // Если препятствие слишком далеко, удаляем его
       if (dist > 20) {
         scene.remove(obstacle);
@@ -406,17 +420,22 @@ function checkObstacleCollisions(carPos) {
 
 function checkSpecialTrackCollisions(carPos, carBody) {
   // Проверка столкновений со всеми специальными элементами трассы
-  if (trackElements && trackElements.length > 0) {
-    for (const element of trackElements) {
-      // Пропускаем элементы без физического тела
-      if (!element.physics) continue;
-      
+  if (!trackElements || trackElements.length === 0) return;
+  
+  for (const element of trackElements) {
+    // Пропускаем элементы без физического тела или визуала
+    if (!element.physics || !element.visual) continue;
+    
+    try {
       const dist = carPos.distanceTo(element.visual.position);
       
       // Проверяем тип элемента и обрабатываем столкновение
       if (element.type === 'ramp' && dist < element.physics.collisionRadius) {
-        const carDirection = new THREE.Vector3();
-        carBody.vectorToWorldFrame(new THREE.Vector3(0, 0, -1), carDirection);
+        // Получаем направление машины через THREE.js кватернион
+        const carDirection = new THREE.Vector3(0, 0, -1);
+        carDirection.applyQuaternion(carBody.quaternion);
+        carDirection.normalize();
+        
         const toElement = new THREE.Vector3().subVectors(element.visual.position, carPos).normalize();
         
         // Если машина движется в направлении элемента
@@ -451,7 +470,7 @@ function checkSpecialTrackCollisions(carPos, carBody) {
       // Обработка столкновения с туннелями
       if (element.type === 'tunnel' && dist < element.physics.collisionRadius) {
         // Уменьшаем сопротивление воздуха при нахождении в туннеле
-        const dragFactor = 0.5; // Коэффициент уменьшения сопротивления
+        const dragFactor = 0.5;
         const currentVelocity = carBody.velocity.clone();
         currentVelocity.scale(dragFactor, currentVelocity);
         carBody.velocity.copy(currentVelocity);
@@ -459,6 +478,8 @@ function checkSpecialTrackCollisions(carPos, carBody) {
         // Визуальный эффект при входе в туннель
         createItemEffect('tunnel', element.visual.position);
       }
+    } catch (err) {
+      console.error('Error in track element collision:', err);
     }
   }
 }
@@ -469,7 +490,8 @@ startBtn.addEventListener('click', () => {
   startScreen.style.display = 'none';
   window.state.isPlaying = true;
   window.state.startTime = Date.now();
-  window.car.reset(track.spawnPos, track.spawnRot);
+  // reset with rotation angle only
+  window.car.reset(track.spawnPos, track.spawnRot.y);
   window.botManager.reset();
 });
 
@@ -497,11 +519,25 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
 
   if (window.state.isPlaying && window.car && window.botManager && window.hud) {
-    world.step(1 / 60, dt, CONFIG.physics.substeps);
-    window.car.update();
-    window.botManager.update(dt);
+    try {
+      world.step(1 / 60, dt, CONFIG.physics.substeps);
+    } catch (err) {
+      console.error('Physics world.step error:', err.message);
+    }
+    
+    try {
+      window.car.update();
+    } catch (err) {
+      console.error('Car update error:', err.message);
+    }
+    
+    try {
+      window.botManager.update(dt);
+    } catch (err) {
+      console.error('BotManager update error:', err.message);
+    }
 
-    // Проверка столкновений ботов с минами
+    // Проверка столкновений ботов с минами и маслом
     if (window.itemSystem) {
       for (const bot of window.botManager.bots) {
         const botPos = bot.controller.chassisBody.position;
@@ -511,6 +547,14 @@ function animate() {
           // Сбрасываем скорость
           bot.controller.chassisBody.velocity.set(0, 0, 0);
           bot.controller.chassisBody.angularVelocity.set(0, 0, 0);
+        });
+        window.itemSystem.checkOilCollisions(bot.controller, (oil) => {
+          // Бот наехал на масло - теряет управление на 1 секунду
+          bot.controller.stun(1000);
+        });
+        window.itemSystem.checkBallCollisions(bot.controller, () => {
+          // Бот столкнулся с шаром - скорость сброшена
+          console.log('Ball hit bot!');
         });
       }
     }
@@ -555,7 +599,9 @@ function animate() {
 
     // Обновление системы предметов
     if (window.itemSystem) {
-      window.itemSystem.update(dt, track.segments);
+      // Ensure track.segments exists before passing it to itemSystem.update
+      const trackSegments = track && track.segments ? track.segments : [];
+      window.itemSystem.update(dt, trackSegments);
       // Проверка сбора предметов
       window.itemSystem.checkItemCollection(window.car.mesh.position);
       // Проверка столкновений с минами
@@ -565,6 +611,16 @@ function animate() {
         // Сбрасываем скорость
         window.car.chassisBody.velocity.set(0, 0, 0);
         window.car.chassisBody.angularVelocity.set(0, 0, 0);
+      });
+      // Проверка столкновений с масляными пятнами
+      window.itemSystem.checkOilCollisions(window.car, (oil) => {
+        // Игрок наехал на масло - теряет управление на 1 секунду
+        window.car.stun(1000);
+      });
+      // Проверка столкновений с шарами
+      window.itemSystem.checkBallCollisions(window.car, () => {
+        // Игрок столкнулся с шаром - скорость сброшена
+        console.log('Ball hit player!');
       });
     }
 

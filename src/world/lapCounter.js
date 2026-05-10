@@ -15,10 +15,12 @@ export class LapCounter {
     this.checkpointCount = 5;
     this.checkpoints = this._createCheckpoints();
     
-    // Начинаем с 0
+    // Начинаем с 0 (первый чекпоинт — старт/финиш, зелёный)
     this.currentCheckpoint = 0;
     this.lastPosition = null;
     this.finishedLaps = 0;
+    // Флаг, указывающий, что мы прошли все промежуточные чекпоинты и ждём прохождения стартового (зелёного) чекпоинта для завершения круга
+    this.waitingForFinish = false;
     
     // Зона старта/финиша
     this.startFinishZone = new THREE.Box3();
@@ -52,14 +54,15 @@ export class LapCounter {
   }
   _createCheckpoints() {
     const checkpoints = [];
-    const segmentCount = this.segments.length;
     
-    // Разбиваем трассу на равные сегменты для контрольных точек
-    const step = Math.floor(segmentCount / this.checkpointCount);
-    
+    // Хаотичные позиции по всей карте 600x600
     for (let i = 0; i < this.checkpointCount; i++) {
-      const segIndex = (i * step) % segmentCount;
-      checkpoints.push(this.segments[segIndex].clone());
+      const pos = new THREE.Vector3(
+        (Math.random() - 0.5) * 240,
+        0,
+        (Math.random() - 0.5) * 240
+      );
+      checkpoints.push(pos);
     }
     
     return checkpoints;
@@ -170,25 +173,21 @@ export class LapCounter {
       }
     }
     
-    // Проверка финиша: прошли все 5 точек (0-4) и вернулись в зону старта
-    if (this.currentCheckpoint === this.checkpointCount) {
-      // Все контрольные точки пройдены, ждём возвращения на старт
-      if (this._isInZone(carPosition, this.startFinishZone)) {
-        // Проверяем движение
-        const movement = carPosition.clone().sub(this.lastPosition);
-        const moveDistance = movement.length();
-        
-        if (moveDistance > 0.5) {
-          this.finishedLaps++;
-          const lapNum = this.finishedLaps;
-          
-          if (this.onLapComplete) {
-            this.onLapComplete(lapNum);
-          }
-          
-          // Сброс для следующего круга
-          this.currentCheckpoint = 0;
+    // Проверка финиша: если пройдены все промежуточные чекпоинты, ждём прохождения стартового (зелёного) чекпоинта
+    if (this.currentCheckpoint >= this.checkpointCount) {
+      // Стартовый чекпоинт находится в this.checkpoints[0]
+      const startCheckpoint = this.checkpoints[0];
+      const distanceToStart = carPosition.distanceTo(startCheckpoint);
+      const finishThreshold = 25; // тот же порог, что и для обычных чекпоинтов
+      if (distanceToStart < finishThreshold) {
+        this.finishedLaps++;
+        const lapNum = this.finishedLaps;
+        if (this.onLapComplete) {
+          this.onLapComplete(lapNum);
         }
+        // Сброс для следующего круга
+        this.currentCheckpoint = 0;
+        this.lastPosition = null;
       }
     }
     
