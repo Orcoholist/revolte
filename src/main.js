@@ -361,6 +361,14 @@ document.addEventListener('keydown', (e) => {
       }
     }
   }
+
+  // Блокировка Ctrl+D (добавить в избранное) и Ctrl+S (сохранить страницу) во время игры
+  if (window.state.isPlaying && (e.ctrlKey || e.metaKey)) { // e.metaKey для Cmd на Mac
+    if (e.code === 'KeyD' || e.code === 'KeyS') {
+      e.preventDefault(); // Отменяем действие браузера
+      console.log(`Действие ${e.code} заблокировано во время игры.`);
+    }
+  }
 });
 
 // ==================== ПРОВЕРКА СТОЛКНОВЕНИЙ С ПРЕПЯТСТВИЯМИ ====================

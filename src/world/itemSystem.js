@@ -627,7 +627,7 @@ export class ItemSystem {
         oilBackward.applyQuaternion(bot.mesh.quaternion);
         const oilPos = bot.mesh.position.clone().add(oilBackward.multiplyScalar(2));
         
-        const oil = new Oil(oilPos, this.scene);
+        const oil = new Oil(oilPos, this.scene, bot);
         this.activeOils.push(oil);
         
         // Визуальный эффект
@@ -664,33 +664,24 @@ export class ItemSystem {
     this.activeBalls = [];
   }
 
-  /**
-   * Проверка столкновений с минами
-   */
-  checkMineCollisions(car, onHit = null) {
-    for (let i = this.activeMines.length - 1; i >= 0; i--) {
-      const mine = this.activeMines[i];
-      if (mine.checkCollision(car)) {
-        mine.explode();
-        this.activeMines.splice(i, 1);
-        if (onHit) onHit();
-      }
-    }
-  }
-
-  /**
-   * Проверка столкновений с масляными пятнами
-   */
-  checkOilCollisions(car, onHit = null) {
-    for (let i = this.activeOils.length - 1; i >= 0; i--) {
-      const oil = this.activeOils[i];
-      // Пропускаем владельца масла — он не должен пострадать от своего же масла
-      if (oil.owner === car) continue;
-      if (oil.checkCollision(car)) {
-        if (onHit) onHit(oil);
-      }
-    }
-  }
+   /**
+    * Проверка столкновений с масляными пятнами
+    * @param {Object} car - CarController или BotController
+    * @param {function} onHit - callback, вызывается при первом попадании в масло
+    */
+   checkOilCollisions(car, onHit = null) {
+     for (let i = this.activeOils.length - 1; i >= 0; i--) {
+       const oil = this.activeOils[i];
+       // Пропускаем владельца масла — он не должен пострадать от своего же масла
+       if (oil.owner === car) continue;
+       if (oil.checkCollision(car)) {
+         if (onHit) onHit(oil);
+        // Удаляем пятно после первого срабатывания, чтобы не влиять далее
+        oil.destroy();
+        this.activeOils.splice(i, 1);
+       }
+     }
+   }
 
   /**
    * Проверка столкновений с шарами
@@ -703,6 +694,25 @@ export class ItemSystem {
         ball.destroy();
         this.activeBalls.splice(i, 1);
         if (onHit) onHit();
+      }
+    }
+  }
+
+  /**
+   * Проверка столкновений с минами
+   * @param {Object} car - CarController или BotController
+   * @param {function} onHit - callback, вызывается при попадании в мину
+   */
+  checkMineCollisions(car, onHit = null) {
+    for (let i = this.activeMines.length - 1; i >= 0; i--) {
+      const mine = this.activeMines[i];
+      // Пропускаем владельца мины — он не должен пострадать от своей же мины
+      if (mine.owner === car) continue;
+      if (mine.checkCollision(car)) {
+        if (onHit) onHit();
+        // Мина исчезает после срабатывания
+        mine.destroy();
+        this.activeMines.splice(i, 1);
       }
     }
   }

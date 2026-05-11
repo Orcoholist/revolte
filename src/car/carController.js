@@ -267,10 +267,11 @@ export class CarController {
    * @param {number} duration - длительность в миллисекундах
    */
   oilSlick(duration) {
-    // Если уже на масле — не сбрасываем таймер (иначе каждые 2 кадра таймер обнуляется)
-    if (this.onOil) return;
-    this.onOil = true;
-    this.oilDuration = duration / 1000; // конвертируем мс в секунды
+     // Если уже на масле — не сбрасываем таймер (иначе каждые 2 кадра таймер обнуляется)
+     if (this.onOil) return;
+     this.onOil = true;
+     // Явно задаём 3 секунды инверсии, независимо от передаваемого значения
+     this.oilDuration = 3; // секунды
     // Случайный боковой импульс для эффекта заноса
     const sideForce = (Math.random() - 0.5) * 15;
     const forward = new THREE.Vector3(0, 0, 1);
