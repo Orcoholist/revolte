@@ -9,14 +9,14 @@ const _mineGeometries = {
 };
 
 const _mineMaterials = {
-  body: new THREE.MeshPhongMaterial({
+  body: new THREE.MeshStandardMaterial({
     color: 0xff8800,
     emissive: 0xff4400,
     emissiveIntensity: 0.4,
     transparent: true,
     opacity: 0.9
   }),
-  spike: new THREE.MeshPhongMaterial({
+  spike: new THREE.MeshStandardMaterial({
     color: 0xff4400,
     emissive: 0xff2200,
     emissiveIntensity: 0.5

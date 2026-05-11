@@ -14,3 +14,8 @@ graphify-out/
 # Глобальный конфиг игнорируется
 !.koda/
 .koda/secrets/
+.aider*
+.env
+
+venv/
+.env

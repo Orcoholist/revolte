@@ -10,7 +10,7 @@ const _ballGeometries = {
 };
 
 const _ballMaterials = {
-  sphere: new THREE.MeshPhongMaterial({
+  sphere: new THREE.MeshStandardMaterial({
     color: 0xff8800,
     emissive: 0xff4400,
     emissiveIntensity: 0.3,

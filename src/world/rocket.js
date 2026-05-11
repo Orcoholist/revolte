@@ -44,19 +44,23 @@ export class Rocket {
 
   _createMesh() {
     const bodyGeom = new THREE.CylinderGeometry(0.2, 0.3, 1.5, 8);
-    const bodyMat = new THREE.MeshPhongMaterial({
+    const bodyMat = new THREE.MeshStandardMaterial({
       color: 0xff4444,
       emissive: 0xff2200,
-      emissiveIntensity: 0.8
+      emissiveIntensity: 0.8,
+      roughness: 0.3,
+      metalness: 0.8
     });
     const body = new THREE.Mesh(bodyGeom, bodyMat);
     body.rotation.x = Math.PI / 2;
 
     const noseGeom = new THREE.ConeGeometry(0.3, 0.8, 8);
-    const noseMat = new THREE.MeshPhongMaterial({
+    const noseMat = new THREE.MeshStandardMaterial({
       color: 0xffaa00,
       emissive: 0xff6600,
-      emissiveIntensity: 0.5
+      emissiveIntensity: 0.5,
+      roughness: 0.4,
+      metalness: 0.7
     });
     const nose = new THREE.Mesh(noseGeom, noseMat);
     nose.rotation.x = -Math.PI / 2;

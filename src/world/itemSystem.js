@@ -60,11 +60,12 @@ const _itemGeometries = {
 };
 
 const _itemMaterials = {
-  base: new THREE.MeshPhongMaterial({
+  base: new THREE.MeshStandardMaterial({
     color: 0xffffff,
     emissive: 0x222222,
     emissiveIntensity: 0.5,
-    shininess: 80,
+    roughness: 0.2,
+    metalness: 0.1,
     transparent: true,
     opacity: 0.9
   }),
@@ -73,10 +74,12 @@ const _itemMaterials = {
     transparent: true,
     opacity: 0.7
   }),
-  core: new THREE.MeshPhongMaterial({
+  core: new THREE.MeshStandardMaterial({
     color: 0x00ffff,
     emissive: 0x00aaaa,
     emissiveIntensity: 0.6,
+    roughness: 0.1,
+    metalness: 0.9,
     shininess: 100
   }),
   indicator: new THREE.MeshBasicMaterial({
