@@ -11,7 +11,7 @@ export function createTrack(scene, world) {
   scene.add(trackGroup);
 
   // Создаём основную поверхность трассы
-  const trackGeometry = new THREE.PlaneGeometry(217, 217, 50, 50);
+  const trackGeometry = new THREE.PlaneGeometry(CONFIG.world.size, CONFIG.world.size, 50, 50);
   const trackMaterial = new THREE.MeshStandardMaterial({
     color: 0x333333,
     roughness: 0.8,
@@ -23,7 +23,7 @@ export function createTrack(scene, world) {
   trackGroup.add(trackMesh);
 
   // Создаём физическое тело для трассы
-  const trackShape = new CANNON.Box(new CANNON.Vec3(217 / 2, 0.1, 217 / 2));
+  const trackShape = new CANNON.Box(new CANNON.Vec3(CONFIG.world.size / 2, 0.1, CONFIG.world.size / 2));
   const trackBody = new CANNON.Body({
     mass: 0,
     shape: trackShape,
@@ -35,7 +35,7 @@ export function createTrack(scene, world) {
   // Создаём сегменты трассы (для навигации ботов)
   const segments = [];
   const segmentCount = 16;
-  const radius = 100;
+  const radius = 80; // Reduced from 100 to fit better in the smaller map
   
   for (let i = 0; i < segmentCount; i++) {
     const angle = (i / segmentCount) * Math.PI * 2;
@@ -44,9 +44,9 @@ export function createTrack(scene, world) {
     segments.push(new THREE.Vector3(x, 0, z));
   }
 
-  // Создаём точки спавна по кругу вокруг центра (радиус 80)
+  // Создаём точки спавна по кругу вокруг центра (уменьшенный радиус для новой карты)
   const spawnPoints = [];
-  const spawnRadius = 80;
+  const spawnRadius = 60; // Reduced from 80 to fit better in the smaller map
   
   for (let i = 0; i < segmentCount; i++) {
     const angle = (i / segmentCount) * Math.PI * 2;
@@ -67,7 +67,7 @@ export function createTrack(scene, world) {
   // Петли
   for (let i = 0; i < 3; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const distance = 50 + Math.random() * 30;
+    const distance = 40 + Math.random() * 20; // Reduced distances to fit in smaller map
     const x = Math.cos(angle) * distance;
     const z = Math.sin(angle) * distance;
     
@@ -103,9 +103,9 @@ export function createTrack(scene, world) {
   }
   
   // Создаём декоративные элементы
-  for (let i = 0; i < 50; i++) {
+  for (let i = 0; i < 30; i++) { // Reduced number of decorative elements
     const angle = Math.random() * Math.PI * 2;
-    const distance = 100 + Math.random() * 50;
+    const distance = 80 + Math.random() * 30; // Reduced distance range
     const x = Math.cos(angle) * distance;
     const z = Math.sin(angle) * distance;
     
@@ -175,8 +175,8 @@ export function createTrack(scene, world) {
   
   trackGroup.add(railGroup);
 
-  // Точка спавна игрока на круге радиусом 80, угол 0 (ось X+)
-  const spawnRadiusPlayer = 80;
+  // Точка спавна игрока на круге, адаптированная под новую карту
+  const spawnRadiusPlayer = 60; // Reduced from 80 to match new spawn radius
   const spawnAnglePlayer = 0;
   const spawnPosPlayer = new THREE.Vector3(
     Math.cos(spawnAnglePlayer) * spawnRadiusPlayer,
@@ -203,7 +203,7 @@ export function createTrack(scene, world) {
  */
 function generateFigureEightPath() {
   const points = [];
-  const scale = 80; // размер восьмёрки
+  const scale = 60; // Reduced from 80 to fit better in the smaller map
   const steps = 100;
 
   // Стартовая точка – центр
@@ -222,4 +222,5 @@ function generateFigureEightPath() {
   points.push(new THREE.Vector3(0, 0, 0));
 
   return points;
+
 }

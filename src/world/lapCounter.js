@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CONFIG } from '../engine/config.js';
 
 /**
  * Система отслеживания кругов на трассе.
@@ -55,10 +56,11 @@ export class LapCounter {
   }
   _createCheckpoints() {
     const checkpoints = [];
-    const maxRadius = 80; // чтобы чекпоинты были видны внутри купола (SIZE/2 ≈ 108)
+    // Calculate maxRadius based on the world size to keep checkpoints within bounds
+    const maxRadius = Math.min(80, CONFIG.world.size / 2.5); // Using 40% of half world size
     
     for (let i = 0; i < this.checkpointCount; i++) {
-      // Случайная позиция в пределах круга радиусом 80
+      // Случайная позиция в пределах круга радиусом maxRadius
       const angle = Math.random() * Math.PI * 2;
       const dist = 30 + Math.random() * (maxRadius - 30);
       const pos = new THREE.Vector3(

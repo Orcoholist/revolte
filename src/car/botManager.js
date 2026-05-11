@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createWheelMeshes, createCarPhysics, createCarMesh } from './carFactory.js';
 import { recolorCarModel } from './carModelLoader.js';
 import { BotController } from './botController.js';
+import { CONFIG } from '../engine/config.js';
 
 /**
  * Менеджер AI-ботов: создаёт ботов на случайных точках трассы,
@@ -41,10 +42,12 @@ export class BotManager {
   _createCheckpoints(count) {
     const cps = [];
     for (let i = 0; i < count; i++) {
+      // Generate checkpoints within a safe boundary (using 70% of world size/2)
+      const maxCoord = (CONFIG.world.size * 0.7) / 2; // Using 70% of the world size for safety
       const cp = new THREE.Vector3(
-        (Math.random() - 0.5) * 100,
+        (Math.random() - 0.5) * maxCoord * 2, // multiply by 2 since (Math.random() - 0.5) gives us range [-0.5, 0.5]
         0,
-        (Math.random() - 0.5) * 100
+        (Math.random() - 0.5) * maxCoord * 2
       );
       cps.push(cp);
     }
@@ -76,7 +79,8 @@ export class BotManager {
    */
   _getEdgeSpawnPosition(index, total) {
     const angle = (index / total) * Math.PI * 2; // равномерно по окружности
-    const radius = 30; // расстояние от центра к краю арены (можно подстроить)
+    // Calculate radius based on world size to ensure bots spawn within map bounds
+    const radius = Math.min(30, CONFIG.world.size / 6); // Using 1/6 of world size for safety
     const x = Math.cos(angle) * radius;
     const z = Math.sin(angle) * radius;
     // y берём из первой точки трассы + небольшая надбавка
@@ -154,13 +158,23 @@ export class BotManager {
     // Противоположное направление — туда ставим первый чекпоинт
     const oppositeDir = noseDir.clone().negate();
     
-    // Первый чекпоинт на расстоянии 50-70 единиц в противоположном направлении
-    const firstCpDist = 50 + Math.random() * 20;
-    const firstCheckpoint = new THREE.Vector3(
+    // Первый чекпоинт на расстоянии 30-50 единиц в противоположном направлении (уменьшено для безопасности)
+    const maxDistance = Math.min(50, CONFIG.world.size / 3); // Ограничиваем расстояние до 1/3 от размера карты
+    const firstCpDist = 30 + Math.random() * (maxDistance - 30);
+    
+    // Вычисляем потенциальную позицию первого чекпоинта
+    const potentialFirstCheckpoint = new THREE.Vector3(
       startPos.x + oppositeDir.x * firstCpDist,
       0,
       startPos.z + oppositeDir.z * firstCpDist
     );
+    
+    // Ограничиваем координаты, чтобы чекпоинт был внутри границ карты
+    const halfWorldSize = CONFIG.world.size / 2 - 10; // Убираем 10 единиц от края для безопасности
+    const clampedX = Math.max(-halfWorldSize, Math.min(halfWorldSize, potentialFirstCheckpoint.x));
+    const clampedZ = Math.max(-halfWorldSize, Math.min(halfWorldSize, potentialFirstCheckpoint.z));
+    
+    const firstCheckpoint = new THREE.Vector3(clampedX, 0, clampedZ);
     
     // Копируем оригинальные чекпоинты
     const originalCheckpoints = [...this.checkpoints];
@@ -171,9 +185,15 @@ export class BotManager {
     // Добавляем немного случайности в позициях чекпоинтов для большего разнообразия
     const randomizedCheckpoints = shuffledCheckpoints.map(cp => {
       const newCp = cp.clone();
-      // Небольшое смещение для создания разных путей
-      newCp.x += (Math.random() - 0.5) * 4;
-      newCp.z += (Math.random() - 0.5) * 4;
+      // Небольшое смещение для создания разных путей, с проверкой границ
+      const offsetX = (Math.random() - 0.5) * 4;
+      const offsetZ = (Math.random() - 0.5) * 4;
+      
+      const newX = Math.max(-halfWorldSize, Math.min(halfWorldSize, newCp.x + offsetX));
+      const newZ = Math.max(-halfWorldSize, Math.min(halfWorldSize, newCp.z + offsetZ));
+      
+      newCp.x = newX;
+      newCp.z = newZ;
       return newCp;
     });
     
@@ -201,7 +221,8 @@ export class BotManager {
   }
 
   update(dt) {
-    const teleportRadius = 120;
+    // Calculate teleport radius based on world size to keep bots within map bounds
+    const teleportRadius = CONFIG.world.size / 1.8;
     for (const bot of this.bots) {
       if (bot.controller && bot.controller.chassisBody && bot.controller.vehicle) {
         const pos = bot.controller.chassisBody.position;

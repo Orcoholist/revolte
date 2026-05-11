@@ -19,7 +19,7 @@ export const CONFIG = {
     restitution: 0.1
   },
   world: {
-    size: 217,
+    size: 180,  // Reduced from 400 to 180 to make map smaller and manageable
     trackWidth: 20
   },
   camera: {
