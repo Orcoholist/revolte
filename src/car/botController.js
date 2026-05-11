@@ -532,6 +532,24 @@ export class BotController {
     return this.shieldTime && (Date.now() - this.shieldTime < 5000);
   }
   
+  /**
+   * Обработка эффекта масляного пятна
+   */
+  oilSlick(duration) {
+    // Если уже на масле — не сбрасываем таймер
+    if (this.onOil) return;
+    this.onOil = true;
+    // Явно задаём 3 секунды инверсии, независимо от передаваемого значения
+    this.oilDuration = 3; // секунды
+    // Случайный боковой импульс для эффекта заноса
+    const sideForce = (Math.random() - 0.5) * 15;
+    const forward = new THREE.Vector3(0, 0, 1);
+    forward.applyQuaternion(this.mesh.quaternion);
+    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+    this.chassisBody.velocity.x += right.x * sideForce;
+    this.chassisBody.velocity.z += right.z * sideForce;
+  }
+  
   stun(duration) {
     this.isStunned = true;
     this.stunDuration = duration / 1000; // конвертируем мс в секунды
