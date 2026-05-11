@@ -52,6 +52,12 @@ export class BotController {
     this.stuckCheckTime = 0.5; // время для проверки застревания
     this.lastCheckpointTime = 0;
     this.checkpointTimeout = 3; // время ожидания чекпоинта
+
+    // Параметры для заднего хода при застревании
+    this.reverseTimer = 0;
+    this.reverseDuration = 0.8; // сколько секунд ехать назад
+    this.reverseSteer = 0; // направление поворота при движении назад
+    this.isReversing = false;
   }
 
   /**
@@ -65,36 +71,51 @@ export class BotController {
   }
 
   /**
-   * Проверка наличия препятствий впереди
+   * Проверка наличия препятствий впереди (включая других ботов)
    */
   _checkObstaclesAhead() {
-    if (!window.obstacles || window.obstacles.length === 0) return null;
-
     const pos = this.chassisBody.position;
     const forward = new THREE.Vector3(0, 0, -1);
     forward.applyQuaternion(this.mesh.quaternion);
     forward.y = 0;
     forward.normalize();
 
-    // Проверка в конусе впереди
     const obstacles = [];
-    for (const obstacle of window.obstacles) {
-      const toObstacle = new THREE.Vector3().subVectors(obstacle.position, pos);
-      const distance = toObstacle.length();
-      
-      // Проверяем дистанцию
-      if (distance > this.avoidanceDistance) continue;
-      
-      // Проверяем угол
-      const angle = Math.abs(Math.atan2(toObstacle.x, toObstacle.z) - Math.atan2(forward.x, forward.z));
-      if (angle > this.avoidanceAngle) continue;
-      
-      obstacles.push({
-        obstacle: obstacle,
-        distance: distance,
-        angle: angle,
-        position: obstacle.position.clone()
-      });
+
+    // Статические препятствия
+    if (window.obstacles) {
+      for (const obstacle of window.obstacles) {
+        const toObstacle = new THREE.Vector3().subVectors(obstacle.position, pos);
+        const distance = toObstacle.length();
+        if (distance > this.avoidanceDistance) continue;
+        const angle = Math.abs(Math.atan2(toObstacle.x, toObstacle.z) - Math.atan2(forward.x, forward.z));
+        if (angle > this.avoidanceAngle) continue;
+        obstacles.push({
+          obstacle: obstacle,
+          distance: distance,
+          angle: angle,
+          position: obstacle.position.clone()
+        });
+      }
+    }
+
+    // Другие боты
+    if (window.botManager && window.botManager.bots) {
+      for (const otherBot of window.botManager.bots) {
+        if (otherBot.controller === this) continue;
+        const otherPos = otherBot.controller.chassisBody.position;
+        const toOther = new THREE.Vector3().subVectors(otherPos, pos);
+        const distance = toOther.length();
+        if (distance > this.avoidanceDistance) continue;
+        const angle = Math.abs(Math.atan2(toOther.x, toOther.z) - Math.atan2(forward.x, forward.z));
+        if (angle > this.avoidanceAngle) continue;
+        obstacles.push({
+          obstacle: { position: otherPos },
+          distance: distance,
+          angle: angle,
+          position: otherPos.clone()
+        });
+      }
     }
 
     // Сортируем по расстоянию
@@ -155,33 +176,37 @@ export class BotController {
   }
 
   /**
-   * Действия при застревании
+   * Действия при застревании – отъезд назад с поворотом
    */
   _handleStuck() {
-    const pos = this.chassisBody.position;
-    
-    // Пытаемся поехать назад
+    if (!this.isReversing) {
+      // Начинаем отъезд назад
+      this.isReversing = true;
+      this.reverseTimer = 0;
+      // Выбираем случайное направление поворота
+      this.reverseSteer = (Math.random() > 0.5 ? 1 : -1) * CONFIG.car.maxSteer * 0.8;
+    }
+
+    this.reverseTimer += 0.016; // приблизительно dt (вызывается из update)
+
+    // Применяем задний ход
     this.vehicle.applyEngineForce(-CONFIG.car.reverseForce * 0.8, 2);
     this.vehicle.applyEngineForce(-CONFIG.car.reverseForce * 0.8, 3);
-    
-    // Если застряли надолго, применяем импульс
-    if (this.stuckTimer > 2.0) {
-      const forward = new THREE.Vector3(0, 0, -1);
-      forward.applyQuaternion(this.mesh.quaternion);
-      
-      // Пытаемся поехать в противоположном направлении
-      const backward = forward.clone().negate();
-      
-      this.chassisBody.applyImpulse(
-        new CANNON.Vec3(
-          backward.x * 150 + (Math.random() - 0.5) * 30,
-          50, // небольшой подброс
-          backward.z * 150 + (Math.random() - 0.5) * 30
-        ),
-        this.chassisBody.position
-      );
-      
+    this.vehicle.setBrake(0, 0);
+    this.vehicle.setBrake(0, 1);
+    this.vehicle.setBrake(0, 2);
+    this.vehicle.setBrake(0, 3);
+
+    // Поворачиваем в выбранную сторону
+    this.currentSteer = this.reverseSteer;
+    this.vehicle.setSteeringValue(this.currentSteer, 0);
+    this.vehicle.setSteeringValue(this.currentSteer, 1);
+
+    // Если отъехали достаточно долго, выходим из режима реверса
+    if (this.reverseTimer > this.reverseDuration) {
+      this.isReversing = false;
       this.stuckTimer = 0;
+      this.reverseTimer = 0;
     }
   }
 
@@ -233,9 +258,28 @@ export class BotController {
       return;
     }
 
+    // Если бот в режиме отъезда назад, продолжаем его
+    if (this.isReversing) {
+      this._handleStuck();
+      this.mesh.position.copy(this.chassisBody.position);
+      this.mesh.quaternion.copy(this.chassisBody.quaternion);
+      if (this.wheelMeshes && this.wheelMeshes.length > 0) {
+        for (let i = 0; i < 4; i++) {
+          this.vehicle.updateWheelTransform(i);
+          const t = this.vehicle.wheelInfos[i].worldTransform;
+          this.wheelMeshes[i].position.copy(t.position);
+          this.wheelMeshes[i].quaternion.copy(t.quaternion);
+        }
+      }
+      const v = this.chassisBody.velocity;
+      this.speed = Math.sqrt(v.x * v.x + v.z * v.z) * 3.6;
+      return;
+    }
+
     // Проверка на застревание
     if (this._checkStuck(dt)) {
       this._handleStuck();
+      return; // выходим, чтобы не перезаписывать управление
     }
 
     // Проверка препятствий впереди
@@ -262,6 +306,12 @@ export class BotController {
       
       targetSteer = Math.sign(angle) * cfg.maxSteer * Math.min(Math.abs(angle) / 0.3, 1.0);
       this.lastAvoidanceDir = avoidance.side;
+      
+      // Если препятствие очень близко и скорость мала – включаем задний ход
+      if (obstacleInfo.distance < this.avoidanceDistance * 0.5 && this.speed < 5) {
+        this._handleStuck();
+        return;
+      }
       
       // Замедляемся при объезде препятствия
       gasFactor = 0.7;
@@ -467,6 +517,8 @@ export class BotController {
     this.isAvoiding = false;
     this.avoidanceTimer = 0;
     this.lastCheckpointTime = 0;
+    this.isReversing = false;
+    this.reverseTimer = 0;
     
     const forward = new THREE.Vector3(0, 0, -1);
     forward.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY);

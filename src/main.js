@@ -41,6 +41,8 @@ const environment = createEnvironment(scene, world);
 
 // Храним препятствия для проверки столкновений
 const obstacles = [...track.obstacles, ...environment.obstacles];
+// Делаем препятствия доступными для ботов
+window.obstacles = obstacles;
 
 // Инициализация специальных элементов трассы
 let trackElements = [];
