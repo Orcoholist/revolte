@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'; // Импортируем GLTFLoader
 import { CONFIG } from './engine/config.js';
 import { createRenderer, createScene, createCamera, createLighting } from './engine/renderer.js';
 import { createPhysicsWorld } from './engine/physics.js';
@@ -15,6 +16,7 @@ import { initTelegram } from './ui/telegram.js';
 import { LapCounter } from './world/lapCounter.js';
 import { ItemSystem } from './world/itemSystem.js';
 import { EffectsPool } from './world/effectsPool.js';
+import { MovingTrain } from './world/movingTrain.js';
 
 // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 
@@ -26,14 +28,19 @@ createLighting(scene);
 // Передаём scene в particleSystem
 particleSystem.setScene(scene);
 
+// ==================== ИНИЦИАЛИЗАЦИЯ КАМЕРЫ ====================
+// Устанавливаем начальную позицию камеры, чтобы избежать черного экрана
+camera.position.set(0, 5, 10);
+camera.lookAt(0, 0, 0);
+
 const { world, groundMat, wheelMat } = createPhysicsWorld();
 
 // Трасса и окружение
 const track = createTrack(scene, world);
-createEnvironment(scene, world);
+const environment = createEnvironment(scene, world);
 
 // Храним препятствия для проверки столкновений
-const obstacles = track.obstacles;
+const obstacles = [...track.obstacles, ...environment.obstacles];
 
 // Инициализация специальных элементов трассы
 let trackElements = [];
@@ -43,6 +50,18 @@ if (track.elements && track.elements.length > 0) {
   // Резервная инициализация, если элементов нет
   trackElements = [];
 }
+
+// Создаем путь для поезда (из центра на периметр и обратно)
+const trainPath = [
+  new THREE.Vector3(0, 0, 0), // Центр карты
+  new THREE.Vector3(-100, 0, -100),
+  new THREE.Vector3(100, 0, -100),
+  new THREE.Vector3(100, 0, 100),
+  new THREE.Vector3(-100, 0, 100),
+  new THREE.Vector3(0, 0, 0) // Возвращаемся в центр
+];
+
+let train = null; // Инициализируем поезд после загрузки модели
 
 // ==================== СОСТОЯНИЕ ИГРЫ ====================
 window.state = {
@@ -100,6 +119,7 @@ function restartRace() {
   window.lapCounter.reset();
   window.car.reset(track.spawnPos, track.spawnRot.y);
   window.botManager.reset();
+  if (train) train.reset();
   if (window.itemSystem) {
     window.itemSystem.clear();
     // Spawn 60 items on the expanded map
@@ -129,17 +149,53 @@ function returnToMenu() {
   }
 }
 
+// Загружаем модель поезда
+const trainLoader = new GLTFLoader();
+trainLoader.load(
+  '/models/train/train.glb',
+  (gltf) => {
+    console.log('Модель поезда загружена');
+    loadingText.textContent = '✅ Модель поезда загружена!';
+    loadingProgress.style.width = '100%';
+    loadingText.style.color = '#4ade80';
+
+    // Создаем поезд после загрузки модели
+    train = new MovingTrain(scene, world, trainPath, gltf.scene);
+
+    // Если машина уже загружена, показываем кнопку
+    if (window.car) {
+      setTimeout(() => {
+        startBtn.style.display = 'block';
+        loadingText.style.display = 'none';
+        document.getElementById('loading-bar').style.display = 'none';
+      }, 800);
+    }
+  },
+  (xhr) => {
+    console.log((xhr.loaded / xhr.total * 100) + '% загружено поезда');
+    loadingText.textContent = `Загрузка поезда: ${Math.round(xhr.loaded / xhr.total * 100)}%`;
+  },
+  (error) => {
+    console.error('Ошибка загрузки модели поезда:', error);
+    loadingText.textContent = 'Ошибка загрузки поезда';
+    loadingText.style.color = '#ef4444';
+  }
+);
+
 preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
-  loadingText.textContent = '✅ Модель загружена!';
+  console.log('Модель машины загружена');
+  loadingText.textContent = '✅ Модель машины загружена!';
   loadingProgress.style.width = '100%';
   loadingText.style.color = '#4ade80';
 
-  // Показываем кнопку через секунду
-  setTimeout(() => {
-    startBtn.style.display = 'block';
-    loadingText.style.display = 'none';
-    document.getElementById('loading-bar').style.display = 'none';
-  }, 800);
+  // Показываем кнопку, если поезд тоже загружен
+  if (train) {
+    setTimeout(() => {
+      startBtn.style.display = 'block';
+      loadingText.style.display = 'none';
+      document.getElementById('loading-bar').style.display = 'none';
+    }, 800);
+  }
 
   // Создаём машину игрока (колёса встроены в GLTF модель)
   const carMesh = createCarMesh();
@@ -243,7 +299,7 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
     }
   }, { passive: false });
 });
-      
+
 // ==================== КАМЕРА ====================
 
 const camTarget = new THREE.Vector3();
@@ -362,9 +418,9 @@ document.addEventListener('keydown', (e) => {
     }
   }
 
-  // Блокировка Ctrl+D (добавить в избранное) и Ctrl+S (сохранить страницу) во время игры
+  // Блокировка Ctrl+D (добавить в избранное), Ctrl+S (сохранить страницу), Ctrl+A (выделить всё) и Ctrl+W (закрыть окно) во время игры
   if (window.state.isPlaying && (e.ctrlKey || e.metaKey)) { // e.metaKey для Cmd на Mac
-    if (e.code === 'KeyD' || e.code === 'KeyS') {
+    if (e.code === 'KeyD' || e.code === 'KeyS' || e.code === 'KeyA' || e.code === 'KeyW') {
       e.preventDefault(); // Отменяем действие браузера
       console.log(`Действие ${e.code} заблокировано во время игры.`);
     }
@@ -487,6 +543,17 @@ function checkSpecialTrackCollisions(carPos, carBody) {
     }
   }
 }
+    
+// Коллбэк для столкновения с поездом
+function onTrainHitPlayer() {
+  console.log('🚂 Поезд ударил игрока!');
+}
+
+function onTrainHitBot(bot) {
+  return () => {
+    console.log('🚂 Поезд ударил бота!');
+  };
+}
 
 // ==================== СТАРТ ====================
 
@@ -497,6 +564,7 @@ startBtn.addEventListener('click', () => {
   // reset with rotation angle only
   window.car.reset(track.spawnPos, track.spawnRot.y);
   window.botManager.reset();
+  if (train) train.reset();
 });
 
 // Кнопка "Ещё раз"
@@ -567,7 +635,7 @@ function animate() {
     } catch (err) {
       console.error('Car update error:', err.message);
     }
-    
+
     try {
       window.botManager.update(dt);
     } catch (err) {
@@ -607,6 +675,18 @@ function animate() {
       // Проверка столкновений с препятствиями — редко, только рядом с игроком
       checkObstacleCollisions(window.car.mesh.position);
       checkSpecialTrackCollisions(window.car.mesh.position.clone(), window.car.chassisBody);
+
+      // Проверка столкновений с поездом
+      if (train) {
+        if (train.checkCollision(window.car)) {
+          onTrainHitPlayer();
+        }
+        for (const bot of window.botManager.bots) {
+          if (train.checkCollision(bot.controller)) {
+            onTrainHitBot(bot)();
+          }
+        }
+      }
     }
 
     // === КАЖДЫЙ КАДР (предметы) ===
@@ -647,13 +727,16 @@ function animate() {
       window.effectsPool.update(dt);
     }
 
+    // Обновление поезда
+    if (train) {
+      train.update(dt);
+    }
+
     flipBtn.style.display = window.car.isFlipped() ? 'block' : 'none';
   }
 
   renderer.render(scene, camera);
 }
-
-animate();
 
 // ==================== РЕСАЙЗ ====================
 
