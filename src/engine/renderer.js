@@ -3,14 +3,46 @@ import { CONFIG } from './config.js';
 import { ParticleSystem } from './particleSystem.js';
 
 export function createRenderer() {
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  // Create canvas element without pre-initializing any context
+  const canvas = document.createElement('canvas');
+  
+  const renderer = new THREE.WebGLRenderer({ 
+    canvas: canvas,
+    antialias: true,
+    alpha: true,
+    preserveDrawingBuffer: true,  // Enable for debugging
+    powerPreference: "high-performance"
+  });
+  
+  // Verify WebGL renderer was created successfully
+  if (!renderer) {
+    console.error('Failed to create WebGLRenderer');
+    throw new Error('WebGLRenderer creation failed');
+  }
+  
+  // Check canvas dimensions
+  if (renderer.domElement.width === 0 || renderer.domElement.height === 0) {
+    console.error('Canvas has zero dimensions!');
+  }
+  
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
-  document.getElementById('game-container').appendChild(renderer.domElement);
+  
+  // Ensure the game container exists before appending
+  const gameContainer = document.getElementById('game-container');
+  if (gameContainer) {
+    // Clear any existing canvases in the container
+    const existingCanvases = gameContainer.querySelectorAll('canvas');
+    existingCanvases.forEach(canvas => canvas.remove());
+    
+    gameContainer.appendChild(renderer.domElement);
+  } else {
+    console.error('Game container element not found!');
+  }
   
   const particleSystem = new ParticleSystem(null);
   
