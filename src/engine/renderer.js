@@ -32,6 +32,9 @@ export function createRenderer() {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   
+  // Set a clear color so the background is not black
+  renderer.setClearColor(0x87CEEB, 1); // sky blue
+  
   // Ensure the game container exists before appending
   const gameContainer = document.getElementById('game-container');
   if (gameContainer) {
@@ -40,8 +43,10 @@ export function createRenderer() {
     existingCanvases.forEach(canvas => canvas.remove());
     
     gameContainer.appendChild(renderer.domElement);
+    console.log('Renderer canvas appended to #game-container');
   } else {
-    console.error('Game container element not found!');
+    console.warn('Game container element not found! Appending to document.body as fallback.');
+    document.body.appendChild(renderer.domElement);
   }
   
   const particleSystem = new ParticleSystem(null);
