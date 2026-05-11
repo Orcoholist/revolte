@@ -45,7 +45,7 @@ if (track.elements && track.elements.length > 0) {
   trackElements = [];
 }
 
-// Поезд теперь статичен – путь не нужен
+// Поезд теперь движется по кругу – путь не нужен
 let train = null;
 
 // ==================== СОСТОЯНИЕ ИГРЫ ====================
@@ -136,7 +136,7 @@ trainLoader.load(
     loadingProgress.style.width = '100%';
     loadingText.style.color = '#4ade80';
 
-    // Поезд статичен – передаём null путь
+    // Поезд движется по кругу – передаём null путь
     train = new MovingTrain(scene, world, null, gltf.scene);
 
     // Если машина уже загружена, показываем кнопку
@@ -637,7 +637,7 @@ function animate() {
       window.effectsPool.update(dt);
     }
 
-    // Обновляем поезд (стрельба)
+    // Обновляем поезд (движение + стрельба)
     if (train) {
       train.update(dt);
     }

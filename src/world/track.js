@@ -46,7 +46,7 @@ export function createTrack(scene, world) {
 
   // Создаём точки спавна по кругу вокруг центра (радиус 40)
   const spawnPoints = [];
-  const spawnRadius = 40; // увеличен с 15 до 40
+  const spawnRadius = 40;
   
   for (let i = 0; i < segmentCount; i++) {
     const angle = (i / segmentCount) * Math.PI * 2;
@@ -64,44 +64,7 @@ export function createTrack(scene, world) {
   // Создаём специальные элементы трассы
   const trackElements = [];
   
-  // Трамплины
-  for (let i = 0; i < 5; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 40 + Math.random() * 40;
-    const x = Math.cos(angle) * distance;
-    const z = Math.sin(angle) * distance;
-    
-    const rampGeometry = new THREE.BoxGeometry(8, 1, 12);
-    const rampMaterial = new THREE.MeshStandardMaterial({
-      color: 0x666666,
-      roughness: 0.7,
-      metalness: 0.3
-    });
-    const ramp = new THREE.Mesh(rampGeometry, rampMaterial);
-    ramp.position.set(x, 0.5, z);
-    ramp.rotation.y = Math.random() * Math.PI * 2;
-    ramp.castShadow = true;
-    ramp.receiveShadow = true;
-    
-    trackGroup.add(ramp);
-    
-    // Физика для трамплина
-    const rampShape = new CANNON.Box(new CANNON.Vec3(4, 0.5, 6));
-    const rampBody = new CANNON.Body({
-      mass: 0,
-      shape: rampShape,
-      position: new CANNON.Vec3(x, 0.5, z)
-    });
-    world.addBody(rampBody);
-    
-    trackElements.push({
-      type: 'ramp',
-      visual: ramp,
-      physics: rampBody,
-      collisionRadius: 6,
-      bounceFactor: 1.5
-    });
-  }
+  // Трамплины удалены (квадратные лежачие панели)
   
   // Петли
   for (let i = 0; i < 3; i++) {
@@ -170,6 +133,55 @@ export function createTrack(scene, world) {
     });
     world.addBody(treeBody);
   }
+
+  // Создаём железную дорогу (кольцо из рельсов вокруг центра)
+  const railRadius = 30;
+  const railSegments = 32;
+  const railMaterial = new THREE.MeshStandardMaterial({
+    color: 0x888888,
+    roughness: 0.6,
+    metalness: 0.8
+  });
+  const railGroup = new THREE.Group();
+  
+  for (let i = 0; i < railSegments; i++) {
+    const angle = (i / railSegments) * Math.PI * 2;
+    const nextAngle = ((i + 1) / railSegments) * Math.PI * 2;
+    
+    const x1 = Math.cos(angle) * railRadius;
+    const z1 = Math.sin(angle) * railRadius;
+    const x2 = Math.cos(nextAngle) * railRadius;
+    const z2 = Math.sin(nextAngle) * railRadius;
+    
+    // Рельс — тонкий длинный прямоугольник между двумя точками
+    const midX = (x1 + x2) / 2;
+    const midZ = (z1 + z2) / 2;
+    const length = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
+    const angleY = Math.atan2(z2 - z1, x2 - x1);
+    
+    const railPiece = new THREE.Mesh(
+      new THREE.BoxGeometry(length, 0.1, 0.3),
+      railMaterial
+    );
+    railPiece.position.set(midX, 0.05, midZ);
+    railPiece.rotation.y = -angleY;
+    railPiece.castShadow = true;
+    railPiece.receiveShadow = true;
+    railGroup.add(railPiece);
+    
+    // Шпалы (поперечные бруски)
+    const sleeper = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 0.1, 0.15),
+      new THREE.MeshStandardMaterial({ color: 0x5a3a1a, roughness: 0.9 })
+    );
+    sleeper.position.set(midX, 0.05, midZ);
+    sleeper.rotation.y = -angleY + Math.PI / 2;
+    sleeper.castShadow = true;
+    sleeper.receiveShadow = true;
+    railGroup.add(sleeper);
+  }
+  
+  trackGroup.add(railGroup);
 
   // Точка спавна игрока на круге радиусом 40, угол 0 (ось X+)
   const spawnRadiusPlayer = 40;
