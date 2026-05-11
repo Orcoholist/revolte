@@ -44,9 +44,9 @@ export function createTrack(scene, world) {
     segments.push(new THREE.Vector3(x, 0, z));
   }
 
-  // Создаём точки спавна по кругу
+  // Создаём точки спавна по кругу вокруг центра (радиус 15)
   const spawnPoints = [];
-  const spawnRadius = 80;
+  const spawnRadius = 15; // уменьшен с 80 до 15
   
   for (let i = 0; i < segmentCount; i++) {
     const angle = (i / segmentCount) * Math.PI * 2;
@@ -54,13 +54,12 @@ export function createTrack(scene, world) {
     const z = Math.sin(angle) * spawnRadius;
     spawnPoints.push({
       position: new THREE.Vector3(x, 1.5, z),
-      rotation: angle
+      rotation: angle + Math.PI // смотрит от центра
     });
   }
 
   // Создаём препятствия
-  const obstacles = []; // Initialize empty obstacles array since obstacles were removed
-  // Removed obstacles (barrels, crates, containers) as requested
+  const obstacles = [];
 
   // Создаём специальные элементы трассы
   const trackElements = [];
@@ -142,8 +141,6 @@ export function createTrack(scene, world) {
     });
   }
   
-  // Туннели удалены (синие круглые препятствия)
-
   // Создаём декоративные элементы
   for (let i = 0; i < 50; i++) {
     const angle = Math.random() * Math.PI * 2;
@@ -174,13 +171,23 @@ export function createTrack(scene, world) {
     world.addBody(treeBody);
   }
 
+  // Точка спавна игрока на круге радиусом 15, угол 0 (ось X+)
+  const spawnRadiusPlayer = 15;
+  const spawnAnglePlayer = 0;
+  const spawnPosPlayer = new THREE.Vector3(
+    Math.cos(spawnAnglePlayer) * spawnRadiusPlayer,
+    1.5,
+    Math.sin(spawnAnglePlayer) * spawnRadiusPlayer
+  );
+  const spawnRotPlayer = new THREE.Vector3(0, spawnAnglePlayer + Math.PI, 0); // смотрит от центра
+
   // Возвращаем все необходимые данные
   return {
     segments: segments,
     spawnPoints: spawnPoints,
     obstacles: obstacles,
     elements: trackElements,
-    spawnPos: new THREE.Vector3(0, 1.5, 0),
-    spawnRot: new THREE.Vector3(0, 0, 0)
+    spawnPos: spawnPosPlayer,
+    spawnRot: spawnRotPlayer
   };
 }
