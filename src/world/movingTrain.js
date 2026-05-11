@@ -3,13 +3,13 @@ import * as CANNON from 'cannon-es';
 import { Rocket } from './rocket.js';
 
 /**
- * Поезд – движется по зигзагообразному пути и стреляет ракетами каждые 4 секунды.
+ * Поезд – движется по восьмёрке по рельсам и стреляет ракетами каждые 4 секунды.
  */
 export class MovingTrain {
   constructor(scene, world, path, trainModel) {
     this.scene = scene;
     this.world = world;
-    this.path = path || []; // не используется – поезд движется по зигзагу
+    this.path = path || []; // не используется – поезд движется по восьмёрке
     this.mesh = trainModel;
     this.alive = true;
     this.speed = 15; // скорость движения по пути
@@ -17,12 +17,12 @@ export class MovingTrain {
     this._lastShotTime = 0;
     this.shootInterval = 4; // секунды
 
-    // Генерируем зигзагообразный путь (такой же, как в track.js)
-    this.pathPoints = this._generateZigzagPath();
+    // Генерируем путь восьмёрки (такой же, как в track.js)
+    this.pathPoints = this._generateFigureEightPath();
     this.currentSegment = 0; // индекс текущего сегмента (отрезка между точками)
     this.progress = 0; // прогресс вдоль текущего сегмента (0..1)
 
-    // Размещаем поезд в начале пути
+    // Размещаем поезд в начале пути (центр)
     const startPos = this.pathPoints[0];
     this.mesh.position.set(startPos.x, 2.0, startPos.z);
     this.mesh.scale.set(1.5, 1.5, 1.5);
@@ -39,38 +39,25 @@ export class MovingTrain {
   }
 
   /**
-   * Генерирует зигзагообразный путь (копия из track.js)
+   * Генерирует путь восьмёрки (копия из track.js)
    */
-  _generateZigzagPath() {
+  _generateFigureEightPath() {
     const points = [];
-    const step = 20;
-    const halfSize = 100;
-    
-    let x = -halfSize;
-    let z = -halfSize;
-    let direction = 1;
-    
-    while (z <= halfSize) {
+    const scale = 80;
+    const steps = 100;
+
+    points.push(new THREE.Vector3(0, 0, 0));
+
+    for (let i = 0; i <= steps; i++) {
+      const t = (i / steps) * Math.PI * 2;
+      const denom = 1 + Math.sin(t) * Math.sin(t);
+      const x = scale * Math.cos(t) / denom;
+      const z = scale * Math.sin(t) * Math.cos(t) / denom;
       points.push(new THREE.Vector3(x, 0, z));
-      
-      while (true) {
-        const nextX = x + direction * step;
-        if (nextX > halfSize || nextX < -halfSize) {
-          x = direction > 0 ? halfSize : -halfSize;
-          points.push(new THREE.Vector3(x, 0, z));
-          break;
-        }
-        x = nextX;
-        points.push(new THREE.Vector3(x, 0, z));
-      }
-      
-      z += step;
-      if (z > halfSize) break;
-      
-      points.push(new THREE.Vector3(x, 0, z));
-      direction *= -1;
     }
-    
+
+    points.push(new THREE.Vector3(0, 0, 0));
+
     return points;
   }
 
@@ -79,7 +66,7 @@ export class MovingTrain {
 
     this._timeAccum += dt;
 
-    // Движение по зигзагообразному пути
+    // Движение по восьмёрке
     const segmentLength = this._getSegmentLength(this.currentSegment);
     const moveDistance = this.speed * dt;
     
@@ -108,7 +95,7 @@ export class MovingTrain {
     
     // Поворачиваем поезд по направлению движения (с учётом разворота на 180°)
     const dirAngle = Math.atan2(p2.z - p1.z, p2.x - p1.x);
-    this.mesh.rotation.y = -dirAngle + Math.PI; // +Math.PI для разворота модели
+    this.mesh.rotation.y = -dirAngle + Math.PI;
 
     // Обновляем физическое тело
     this.body.position.set(x, 2.5, z);
@@ -197,7 +184,6 @@ export class MovingTrain {
     if (!this.alive) return false;
     const carPos = car.mesh ? car.mesh.position : car.chassisBody.position;
     const dist = carPos.distanceTo(this.mesh.position);
-    // Радиус столкновения – 6 метров (габариты поезда)
     return dist < 6;
   }
 

@@ -64,8 +64,6 @@ export function createTrack(scene, world) {
   // Создаём специальные элементы трассы
   const trackElements = [];
   
-  // Трамплины удалены (квадратные лежачие панели)
-  
   // Петли
   for (let i = 0; i < 3; i++) {
     const angle = Math.random() * Math.PI * 2;
@@ -134,8 +132,8 @@ export function createTrack(scene, world) {
     world.addBody(treeBody);
   }
 
-  // Создаём железную дорогу (зигзагообразный путь по всей карте)
-  const railPoints = generateZigzagPath();
+  // Создаём железную дорогу (восьмёрка по всей карте)
+  const railPoints = generateFigureEightPath();
   const railMaterial = new THREE.MeshStandardMaterial({
     color: 0x888888,
     roughness: 0.6,
@@ -199,46 +197,28 @@ export function createTrack(scene, world) {
 }
 
 /**
- * Генерирует зигзагообразный путь по всей карте.
+ * Генерирует путь в форме восьмёрки, проходящий через центр карты.
  * Возвращает массив THREE.Vector3.
  */
-function generateZigzagPath() {
+function generateFigureEightPath() {
   const points = [];
-  const step = 20; // шаг между точками
-  const halfSize = 100; // половина размера карты (217/2 ≈ 108, берём 100)
-  
-  // Двигаемся зигзагом: слева направо, затем вниз, затем справа налево и т.д.
-  let x = -halfSize;
-  let z = -halfSize;
-  let direction = 1; // 1 = вправо, -1 = влево
-  
-  while (z <= halfSize) {
-    // Добавляем точку в начале строки
+  const scale = 80; // размер восьмёрки
+  const steps = 100;
+
+  // Стартовая точка – центр
+  points.push(new THREE.Vector3(0, 0, 0));
+
+  // Точки лемнискаты (восьмёрка)
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * Math.PI * 2;
+    const denom = 1 + Math.sin(t) * Math.sin(t);
+    const x = scale * Math.cos(t) / denom;
+    const z = scale * Math.sin(t) * Math.cos(t) / denom;
     points.push(new THREE.Vector3(x, 0, z));
-    
-    // Двигаемся по X до противоположного края
-    while (true) {
-      const nextX = x + direction * step;
-      if (nextX > halfSize || nextX < -halfSize) {
-        // Дошли до края – добавляем точку на краю
-        x = direction > 0 ? halfSize : -halfSize;
-        points.push(new THREE.Vector3(x, 0, z));
-        break;
-      }
-      x = nextX;
-      points.push(new THREE.Vector3(x, 0, z));
-    }
-    
-    // Сдвигаемся вниз (по Z)
-    z += step;
-    if (z > halfSize) break;
-    
-    // Добавляем точку на новой строке (на том же X)
-    points.push(new THREE.Vector3(x, 0, z));
-    
-    // Меняем направление
-    direction *= -1;
   }
-  
+
+  // Замыкаем в центр
+  points.push(new THREE.Vector3(0, 0, 0));
+
   return points;
 }
