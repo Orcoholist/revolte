@@ -183,7 +183,8 @@ export function createTrack(scene, world) {
     1.5,
     Math.sin(spawnAnglePlayer) * spawnRadiusPlayer
   );
-  const spawnRotPlayer = new THREE.Vector3(0, -Math.PI / 2 - spawnAnglePlayer, 0); // смотрит в центр (к поезду)
+  // Поворачиваем машину игрока на 180° относительно направления к центру
+  const spawnRotPlayer = new THREE.Vector3(0, -Math.PI / 2 - spawnAnglePlayer + Math.PI, 0);
 
   // Возвращаем все необходимые данные
   return {
