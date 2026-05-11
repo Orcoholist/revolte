@@ -46,7 +46,7 @@ export function createTrack(scene, world) {
 
   // Создаём точки спавна по кругу вокруг центра (радиус 80)
   const spawnPoints = [];
-  const spawnRadius = 80; // увеличен с 40 до 80
+  const spawnRadius = 80;
   
   for (let i = 0; i < segmentCount; i++) {
     const angle = (i / segmentCount) * Math.PI * 2;
@@ -54,7 +54,7 @@ export function createTrack(scene, world) {
     const z = Math.sin(angle) * spawnRadius;
     spawnPoints.push({
       position: new THREE.Vector3(x, 1.5, z),
-      rotation: -Math.PI / 2 - angle // смотрит в центр (к поезду)
+      rotation: Math.PI / 2 - angle // смотрит в центр (к поезду)
     });
   }
 
