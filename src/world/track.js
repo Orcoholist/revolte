@@ -142,45 +142,7 @@ export function createTrack(scene, world) {
     });
   }
   
-  // Туннели
-  for (let i = 0; i < 4; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 60 + Math.random() * 20;
-    const x = Math.cos(angle) * distance;
-    const z = Math.sin(angle) * distance;
-    
-    const tunnelGeometry = new THREE.CylinderGeometry(6, 6, 15, 16);
-    const tunnelMaterial = new THREE.MeshStandardMaterial({
-      color: 0x0000ff,
-      roughness: 0.2,
-      metalness: 0.8,
-      side: THREE.DoubleSide
-    });
-    const tunnel = new THREE.Mesh(tunnelGeometry, tunnelMaterial);
-    tunnel.position.set(x, 7.5, z);
-    tunnel.rotation.y = Math.random() * Math.PI * 2;
-    tunnel.castShadow = true;
-    tunnel.receiveShadow = true;
-    
-    trackGroup.add(tunnel);
-    
-    // Физика для туннеля
-    const tunnelShape = new CANNON.Box(new CANNON.Vec3(6, 7.5, 7.5));
-    const tunnelBody = new CANNON.Body({
-      mass: 0,
-      shape: tunnelShape,
-      position: new CANNON.Vec3(x, 7.5, z)
-    });
-    world.addBody(tunnelBody);
-    
-    trackElements.push({
-      type: 'tunnel',
-      visual: tunnel,
-      physics: tunnelBody,
-      collisionRadius: 8,
-      bounceFactor: 0.8
-    });
-  }
+  // Туннели удалены (синие круглые препятствия)
 
   // Создаём декоративные элементы
   for (let i = 0; i < 50; i++) {
