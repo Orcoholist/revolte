@@ -134,9 +134,8 @@ export function createTrack(scene, world) {
     world.addBody(treeBody);
   }
 
-  // Создаём железную дорогу (кольцо из рельсов вокруг центра)
-  const railRadius = 30;
-  const railSegments = 32;
+  // Создаём железную дорогу (зигзагообразный путь по всей карте)
+  const railPoints = generateZigzagPath();
   const railMaterial = new THREE.MeshStandardMaterial({
     color: 0x888888,
     roughness: 0.6,
@@ -144,21 +143,16 @@ export function createTrack(scene, world) {
   });
   const railGroup = new THREE.Group();
   
-  for (let i = 0; i < railSegments; i++) {
-    const angle = (i / railSegments) * Math.PI * 2;
-    const nextAngle = ((i + 1) / railSegments) * Math.PI * 2;
+  for (let i = 0; i < railPoints.length - 1; i++) {
+    const p1 = railPoints[i];
+    const p2 = railPoints[i + 1];
     
-    const x1 = Math.cos(angle) * railRadius;
-    const z1 = Math.sin(angle) * railRadius;
-    const x2 = Math.cos(nextAngle) * railRadius;
-    const z2 = Math.sin(nextAngle) * railRadius;
+    const midX = (p1.x + p2.x) / 2;
+    const midZ = (p1.z + p2.z) / 2;
+    const length = Math.sqrt((p2.x - p1.x) ** 2 + (p2.z - p1.z) ** 2);
+    const angleY = Math.atan2(p2.z - p1.z, p2.x - p1.x);
     
     // Рельс — тонкий длинный прямоугольник между двумя точками
-    const midX = (x1 + x2) / 2;
-    const midZ = (z1 + z2) / 2;
-    const length = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
-    const angleY = Math.atan2(z2 - z1, x2 - x1);
-    
     const railPiece = new THREE.Mesh(
       new THREE.BoxGeometry(length, 0.1, 0.3),
       railMaterial
@@ -202,4 +196,49 @@ export function createTrack(scene, world) {
     spawnPos: spawnPosPlayer,
     spawnRot: spawnRotPlayer
   };
+}
+
+/**
+ * Генерирует зигзагообразный путь по всей карте.
+ * Возвращает массив THREE.Vector3.
+ */
+function generateZigzagPath() {
+  const points = [];
+  const step = 20; // шаг между точками
+  const halfSize = 100; // половина размера карты (217/2 ≈ 108, берём 100)
+  
+  // Двигаемся зигзагом: слева направо, затем вниз, затем справа налево и т.д.
+  let x = -halfSize;
+  let z = -halfSize;
+  let direction = 1; // 1 = вправо, -1 = влево
+  
+  while (z <= halfSize) {
+    // Добавляем точку в начале строки
+    points.push(new THREE.Vector3(x, 0, z));
+    
+    // Двигаемся по X до противоположного края
+    while (true) {
+      const nextX = x + direction * step;
+      if (nextX > halfSize || nextX < -halfSize) {
+        // Дошли до края – добавляем точку на краю
+        x = direction > 0 ? halfSize : -halfSize;
+        points.push(new THREE.Vector3(x, 0, z));
+        break;
+      }
+      x = nextX;
+      points.push(new THREE.Vector3(x, 0, z));
+    }
+    
+    // Сдвигаемся вниз (по Z)
+    z += step;
+    if (z > halfSize) break;
+    
+    // Добавляем точку на новой строке (на том же X)
+    points.push(new THREE.Vector3(x, 0, z));
+    
+    // Меняем направление
+    direction *= -1;
+  }
+  
+  return points;
 }
