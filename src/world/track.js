@@ -2,790 +2,223 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { CONFIG } from '../engine/config.js';
 
-// Локальные материалы для физики
-const physGround = new CANNON.Material('groundLocal');
-const physObstacle = new CANNON.Material('obstacleLocal');
+/**
+ * Создаёт трассу с препятствиями и элементами окружения.
+ */
+export function createTrack(scene, world) {
+  const trackGroup = new THREE.Group();
+  const physicsGroup = new THREE.Group();
+  scene.add(trackGroup);
 
-// ==================== КЛАСС ЭЛЕМЕНТА ТРАССЫ ====================
-export class TrackElement {
-  constructor(type, position, visual, physics, physicsBody = null) {
-    this.type = type;
-    this.position = position;
-    this.visual = visual;
-    this.physics = physics;
-    this.physicsBody = physicsBody;
-  }
-}
-
-// ==================== ГЕНЕРАТОР ТЕКСТУР ====================
-function makeCanvasTexture(drawFn, w = 512, h = 512) {
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  drawFn(ctx, w, h);
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  return tex;
-}
-
-function createAsphaltTexture() {
-  const tex = makeCanvasTexture((ctx, w, h) => {
-    ctx.fillStyle = '#3a3a3a';
-    ctx.fillRect(0, 0, w, h);
-    // мелкая зернистость
-    for (let i = 0; i < 4000; i++) {
-      const shade = 70 + Math.random() * 30;
-      ctx.fillStyle = `rgb(${shade},${shade},${shade})`;
-      ctx.fillRect(Math.random() * w, Math.random() * h, 1, 1);
-    }
-  }, 1024, 1024);
-  tex.minFilter = THREE.LinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-  tex.generateMipmaps = false;
-  return tex;
-}
-
-function createConcreteTexture() {
-  return makeCanvasTexture((ctx, w, h) => {
-    ctx.fillStyle = '#c8c0b0';
-    ctx.fillRect(0, 0, w, h);
-    for (let i = 0; i < 1500; i++) {
-      const shade = 180 + Math.random() * 40;
-      ctx.fillStyle = `rgb(${shade},${shade - 10},${shade - 20})`;
-      ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
-    }
-    ctx.strokeStyle = '#999999';
-    ctx.lineWidth = 3;
-    for (let x = 0; x < w; x += 128) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
-    for (let y = 0; y < h; y += 128) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+  // Создаём основную поверхность трассы
+  const trackGeometry = new THREE.PlaneGeometry(217, 217, 50, 50);
+  const trackMaterial = new THREE.MeshStandardMaterial({
+    color: 0x333333,
+    roughness: 0.8,
+    metalness: 0.2
   });
-}
+  const trackMesh = new THREE.Mesh(trackGeometry, trackMaterial);
+  trackMesh.rotation.x = -Math.PI / 2;
+  trackMesh.receiveShadow = true;
+  trackGroup.add(trackMesh);
 
-function createGrassTexture() {
-  return makeCanvasTexture((ctx, w, h) => {
-    // Базовый цвет — более живой
-    const grad = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/1.5);
-    grad.addColorStop(0, '#4a8c2e');
-    grad.addColorStop(0.5, '#3d7a25');
-    grad.addColorStop(1, '#2d5f1a');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
-    
-    // Мелкая текстурная трава — травинки
-    for (let i = 0; i < 12000; i++) {
-      const x = Math.random() * w;
-      const y = Math.random() * h;
-      const g = 100 + Math.random() * 100;
-      const r = 25 + Math.random() * 35;
-      ctx.fillStyle = `rgb(${r},${g},${20 + Math.random() * 25})`;
-      ctx.fillRect(x, y, 1 + Math.random() * 2, 2 + Math.random() * 5);
-    }
-    
-    // Более тёмные пятна для разнообразия
-    for (let i = 0; i < 500; i++) {
-      const x = Math.random() * w;
-      const y = Math.random() * h;
-      ctx.fillStyle = `rgba(20,50,10,${0.1 + Math.random() * 0.3})`;
-      ctx.beginPath();
-      ctx.arc(x, y, 4 + Math.random() * 12, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    
-    // Светлые прожилки-просветы
-    for (let i = 0; i < 300; i++) {
-      const x = Math.random() * w;
-      const y = Math.random() * h;
-      ctx.fillStyle = `rgba(120,180,80,${0.05 + Math.random() * 0.15})`;
-      ctx.beginPath();
-      ctx.arc(x, y, 3 + Math.random() * 8, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  });
-}
-
-function createGravelTexture() {
-  return makeCanvasTexture((ctx, w, h) => {
-    ctx.fillStyle = '#a09080';
-    ctx.fillRect(0, 0, w, h);
-    for (let i = 0; i < 4000; i++) {
-      const shade = 130 + Math.random() * 60;
-      ctx.fillStyle = `rgb(${shade},${shade - 10},${shade - 20})`;
-      ctx.beginPath(); ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 2, 0, Math.PI * 2); ctx.fill();
-    }
-  });
-}
-
-function createRampTexture(color1, color2) {
-  return makeCanvasTexture((ctx, w, h) => {
-    ctx.fillStyle = color1;
-    ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = color2;
-    const stripeW = w / 6;
-    for (let i = 0; i < 6; i += 2) ctx.fillRect(i * stripeW, 0, stripeW, h);
-  });
-}
-
-// ==================== МАТЕРИАЛЫ THREE.JS ====================
-const asphaltTex = createAsphaltTexture();
-const concreteTex = createConcreteTexture();
-const grassTex = createGrassTexture();
-const gravelTex = createGravelTexture();
-const rampTexStandard = createRampTexture('#ff6600', '#ffffff');
-const rampTexSuper = createRampTexture('#ff0000', '#ffff00');
-const rampTexTriple = createRampTexture('#ffd700', '#ff4400');
-
-const M = {
-  asphalt: new THREE.MeshStandardMaterial({ map: asphaltTex, roughness: 0.75, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }),
-  concrete: new THREE.MeshStandardMaterial({ map: concreteTex, roughness: 0.65 }),
-  grass: new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.95 }),
-  gravel: new THREE.MeshStandardMaterial({ map: gravelTex, roughness: 1.0 }),
-  rampStandard: new THREE.MeshStandardMaterial({ map: rampTexStandard, roughness: 0.5, metalness: 0.3 }),
-  rampSuper: new THREE.MeshStandardMaterial({ map: rampTexSuper, roughness: 0.4, metalness: 0.4, emissive: 0x330000, emissiveIntensity: 0.2 }),
-  rampTriple: new THREE.MeshStandardMaterial({ map: rampTexTriple, roughness: 0.3, metalness: 0.5, emissive: 0x332200, emissiveIntensity: 0.3 }),
-  metal: new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.3, metalness: 0.95 }),
-  metalDark: new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.35, metalness: 0.9 }),
-  lightGlow: new THREE.MeshStandardMaterial({ color: 0xffffcc, emissive: 0xffffcc, emissiveIntensity: 0.5 }),
-  redGlow: new THREE.MeshBasicMaterial({ color: 0xff0000 }),
-  greenGlow: new THREE.MeshBasicMaterial({ color: 0x00ff00 }),
-  curb: new THREE.MeshStandardMaterial({ color: 0xff3333, roughness: 0.5 }),
-  curbWhite: new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.5 }),
-  halfPipe: new THREE.MeshStandardMaterial({ color: 0x4488cc, roughness: 0.35, metalness: 0.7 }),
-  loop: new THREE.MeshStandardMaterial({ color: 0xff5500, roughness: 0.3, metalness: 0.8, emissive: 0x330000, emissiveIntensity: 0.2 }),
-  arch: new THREE.MeshStandardMaterial({ color: 0xff3333, roughness: 0.3, metalness: 0.7, emissive: 0x220000, emissiveIntensity: 0.4 }),
-  container: new THREE.MeshStandardMaterial({ color: 0xdd8833, roughness: 0.6, metalness: 0.35 }),
-  barrel: new THREE.MeshStandardMaterial({ color: 0x4477aa, roughness: 0.5, metalness: 0.6 }),
-  crate: new THREE.MeshStandardMaterial({ color: 0xccaa66, roughness: 0.7 }),
-  grandstand: new THREE.MeshStandardMaterial({ color: 0x4477cc, roughness: 0.7 }),
-  grandstandStruct: new THREE.MeshStandardMaterial({ color: 0x999999, roughness: 0.4, metalness: 0.7 }),
-  trunk: new THREE.MeshStandardMaterial({ color: 0x6b4226, roughness: 0.9 }),
-  leaves: new THREE.MeshStandardMaterial({ color: 0x2d7d2d, roughness: 0.8 }),
-  leavesDark: new THREE.MeshStandardMaterial({ color: 0x1d5d1d, roughness: 0.85 }),
-  boardBg: new THREE.MeshStandardMaterial({ color: 0x2244aa, roughness: 0.5 }),
-  wall: new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.6, transparent: true, opacity: 0.3 }),
-};
-
-// ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
-
-function addSlab(scene, world, x, y, z, w, d, h, mat) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-  mesh.position.set(x, y + h / 2, z);
-  mesh.castShadow = true; mesh.receiveShadow = true;
-  scene.add(mesh);
-  const body = new CANNON.Body({ mass: 0, material: physGround });
-  body.addShape(new CANNON.Box(new CANNON.Vec3(w / 2, h / 2, d / 2)));
-  body.position.set(x, y + h / 2, z);
-  world.addBody(body);
-  return { mesh, body };
-}
-
-function addRoadSegment(scene, a, b, width, world, yOffset = 0.01) {
-  const dir = new THREE.Vector3().subVectors(b, a);
-  const len = dir.length();
-  if (len < 0.01) return;
-  dir.normalize();
-  const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
-  mid.y = yOffset;
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, len), M.asphalt);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.rotation.z = -Math.atan2(dir.z, dir.x);
-  mesh.position.copy(mid);
-  mesh.receiveShadow = true;
-  scene.add(mesh);
-  // Добавляем физическую «плоскость» для дорожной поверхности
-  const groundBody = new CANNON.Body({
+  // Создаём физическое тело для трассы
+  const trackShape = new CANNON.Box(new CANNON.Vec3(217 / 2, 0.1, 217 / 2));
+  const trackBody = new CANNON.Body({
     mass: 0,
-    material: physGround
+    shape: trackShape,
+    position: new CANNON.Vec3(0, -0.1, 0)
   });
-  const groundShape = new CANNON.Box(new CANNON.Vec3(width / 2, 0.05, len / 2));
-  groundBody.addShape(groundShape, new CANNON.Vec3(0, 0.05, 0));
-  if (world) {
-    groundBody.position.set(mid.x, mid.y + 0.05, mid.z);
-    world.addBody(groundBody);
-  }
-  const perp = new THREE.Vector3(-dir.z, 0, dir.x);
-  for (const side of [-1, 1]) {
-    const curb = new THREE.Mesh(new THREE.PlaneGeometry(0.8, len), M.curb);
-    curb.rotation.x = -Math.PI / 2;
-    curb.rotation.z = -Math.atan2(dir.z, dir.x);
-    curb.position.copy(mid).add(perp.clone().multiplyScalar(side * (width / 2 + 0.4)));
-    curb.position.y = 0.015;
-    scene.add(curb);
-  }
-}
+  world.addBody(trackBody);
+  physicsGroup.add(trackMesh);
 
-function addRoad(scene, points, width, world, yOffset = 0.01) {
-  for (let i = 0; i < points.length - 1; i++) addRoadSegment(scene, points[i], points[i + 1], width, world, yOffset);
-}
+  // Создаём сегменты трассы (для навигации ботов)
+  const segments = [];
+  const segmentCount = 16;
+  const radius = 100;
+  
+  for (let i = 0; i < segmentCount; i++) {
+    const angle = (i / segmentCount) * Math.PI * 2;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    segments.push(new THREE.Vector3(x, 0, z));
+  }
 
-// Разметка — белые прерывистые полосы по центру дороги
-function addRoadMarkings(scene, points, width = 1.2) {
-  if (points.length < 2) return;
+  // Создаём точки спавна по кругу
+  const spawnPoints = [];
+  const spawnRadius = 80;
   
-  const markingGroup = new THREE.Group();
+  for (let i = 0; i < segmentCount; i++) {
+    const angle = (i / segmentCount) * Math.PI * 2;
+    const x = Math.cos(angle) * spawnRadius;
+    const z = Math.sin(angle) * spawnRadius;
+    spawnPoints.push({
+      position: new THREE.Vector3(x, 1.5, z),
+      rotation: angle
+    });
+  }
+
+  // Создаём препятствия
+  const obstacles = []; // Initialize empty obstacles array since obstacles were removed
+  // Removed obstacles (barrels, crates, containers) as requested
+
+  // Создаём специальные элементы трассы
+  const trackElements = [];
   
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i];
-    const b = points[i + 1];
+  // Трамплины
+  for (let i = 0; i < 5; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 40 + Math.random() * 40;
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
     
-    const dir = new THREE.Vector3().subVectors(b, a);
-    const totalLen = dir.length();
-    if (totalLen < 0.01) continue;
-    dir.normalize();
-    const mid = new THREE.Vector3().lerpVectors(a, b, 0.5);
+    const rampGeometry = new THREE.BoxGeometry(8, 1, 12);
+    const rampMaterial = new THREE.MeshStandardMaterial({
+      color: 0x666666,
+      roughness: 0.7,
+      metalness: 0.3
+    });
+    const ramp = new THREE.Mesh(rampGeometry, rampMaterial);
+    ramp.position.set(x, 0.5, z);
+    ramp.rotation.y = Math.random() * Math.PI * 2;
+    ramp.castShadow = true;
+    ramp.receiveShadow = true;
     
-    const canvas = document.createElement('canvas');
-    const canvasSize = 512;
-    canvas.width = canvasSize;
-    canvas.height = canvasSize;
-    const ctx = canvas.getContext('2d');
+    trackGroup.add(ramp);
     
-    ctx.fillStyle = 'rgba(255, 255, 255, 0)';
-    ctx.fillRect(0, 0, canvasSize, canvasSize);
+    // Физика для трамплина
+    const rampShape = new CANNON.Box(new CANNON.Vec3(4, 0.5, 6));
+    const rampBody = new CANNON.Body({
+      mass: 0,
+      shape: rampShape,
+      position: new CANNON.Vec3(x, 0.5, z)
+    });
+    world.addBody(rampBody);
     
-    ctx.fillStyle = 'rgba(255, 255, 255, 1)';
-    const dashLength = canvasSize / 8;
-    const gapLength = canvasSize / 8;
-    for (let y = 0; y < canvasSize; y += dashLength + gapLength) {
-      ctx.fillRect(0, y, canvasSize, dashLength);
-    }
+    trackElements.push({
+      type: 'ramp',
+      visual: ramp,
+      physics: rampBody,
+      collisionRadius: 6,
+      bounceFactor: 1.5
+    });
+  }
+  
+  // Петли
+  for (let i = 0; i < 3; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 50 + Math.random() * 30;
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
     
-    const markingTexture = new THREE.CanvasTexture(canvas);
-    markingTexture.wrapS = THREE.RepeatWrapping;
-    markingTexture.wrapT = THREE.RepeatWrapping;
-    const verticalRepeat = totalLen / 4;
-    markingTexture.repeat.set(1, verticalRepeat);
+    const loopGeometry = new THREE.TorusGeometry(8, 2, 8, 20);
+    const loopMaterial = new THREE.MeshStandardMaterial({
+      color: 0x00ff00,
+      roughness: 0.3,
+      metalness: 0.7
+    });
+    const loop = new THREE.Mesh(loopGeometry, loopMaterial);
+    loop.position.set(x, 8, z);
+    loop.castShadow = true;
+    loop.receiveShadow = true;
     
-    const stripeMat = new THREE.MeshBasicMaterial({ 
-      map: markingTexture,
-      transparent: true,
-      opacity: 0.9,
-      depthWrite: true,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-      polygonOffsetUnits: -2,
+    trackGroup.add(loop);
+    
+    // Физика для петли
+    const loopShape = new CANNON.Box(new CANNON.Vec3(8, 2, 8));
+    const loopBody = new CANNON.Body({
+      mass: 0,
+      shape: loopShape,
+      position: new CANNON.Vec3(x, 8, z)
+    });
+    world.addBody(loopBody);
+    
+    trackElements.push({
+      type: 'loop',
+      visual: loop,
+      physics: loopBody,
+      collisionRadius: 10,
+      bounceFactor: 1.2
+    });
+  }
+  
+  // Туннели
+  for (let i = 0; i < 4; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 60 + Math.random() * 20;
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
+    
+    const tunnelGeometry = new THREE.CylinderGeometry(6, 6, 15, 16);
+    const tunnelMaterial = new THREE.MeshStandardMaterial({
+      color: 0x0000ff,
+      roughness: 0.2,
+      metalness: 0.8,
       side: THREE.DoubleSide
     });
+    const tunnel = new THREE.Mesh(tunnelGeometry, tunnelMaterial);
+    tunnel.position.set(x, 7.5, z);
+    tunnel.rotation.y = Math.random() * Math.PI * 2;
+    tunnel.castShadow = true;
+    tunnel.receiveShadow = true;
     
-    const stripeGeo = new THREE.PlaneGeometry(width, totalLen);
-    const stripe = new THREE.Mesh(stripeGeo, stripeMat);
-    stripe.rotation.x = -Math.PI / 2;
-    stripe.rotation.z = -Math.atan2(dir.z, dir.x);
-    stripe.position.copy(mid).add(new THREE.Vector3(0, 0.03, 0));
-    markingGroup.add(stripe);
-  }
-  
-  scene.add(markingGroup);
-}
-
-function addJumpRamp(scene, world, x, y, z, rotY, type, elements) {
-  let w, llen, h, mat;
-  if (type === 'standard') { w = 8; llen = 6; h = 1.5; mat = M.rampStandard; }
-  else if (type === 'super') { w = 10; llen = 8; h = 2.5; mat = M.rampSuper; }
-  else { w = 12; llen = 10; h = 3.5; mat = M.rampTriple; }
-  const group = new THREE.Group();
-  group.position.set(x, y, z); group.rotation.y = rotY;
-  const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, llen), mat);
-  base.position.y = h / 2; base.castShadow = true; base.receiveShadow = true;
-  group.add(base);
-  const slopeGeo = new THREE.PlaneGeometry(w, Math.sqrt(llen * llen + h * h));
-  const slope = new THREE.Mesh(slopeGeo, mat);
-  slope.rotation.x = -Math.atan2(h, llen);
-  slope.position.set(0, h * 0.75, llen * 0.35);
-  group.add(slope);
-  const arrowGeo = new THREE.ConeGeometry(0.4, 1.0, 4);
-  const arrowMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-  for (let j = 0; j < 3; j++) {
-    const arrow = new THREE.Mesh(arrowGeo, arrowMat);
-    arrow.position.set((j - 1) * 2.5, h + 0.5, 1); arrow.rotation.x = Math.PI;
-    group.add(arrow);
-  }
-  const neonGeo = new THREE.BoxGeometry(0.15, 0.05, llen);
-  const neonMat = new THREE.MeshBasicMaterial({ color: type === 'triple' ? 0xff00ff : 0x00ffff });
-  for (const s of [-1, 1]) {
-    const neon = new THREE.Mesh(neonGeo, neonMat);
-    neon.position.set(s * (w / 2 - 0.2), h * 0.1, 0);
-    group.add(neon);
-  }
-  scene.add(group);
-  const rampBody = new CANNON.Body({ mass: 0, material: physGround });
-  const steps = 5;
-  for (let i = 0; i < steps; i++) {
-    const t = (i + 0.5) / steps;
-    rampBody.addShape(new CANNON.Box(new CANNON.Vec3(w / 2, 0.2, llen / steps / 2)), new CANNON.Vec3(0, h * t, -llen / 2 + llen * t));
-  }
-  rampBody.position.set(x, y, z); rampBody.quaternion.setFromEuler(0, rotY, 0);
-  world.addBody(rampBody);
-  elements.push(new TrackElement('ramp', new THREE.Vector3(x, y, z), group, { bounceFactor: type === 'triple' ? 2.5 : type === 'super' ? 2.0 : 1.5, collisionRadius: 12 }, rampBody));
-}
-
-function addHalfPipe(scene, world, x, y, z, length, radius, rotY, elements) {
-  const group = new THREE.Group();
-  group.position.set(x, y, z); group.rotation.y = rotY;
-  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, 16, 1, true, 0, Math.PI), M.halfPipe);
-  pipe.rotation.z = Math.PI / 2; pipe.position.y = radius;
-  pipe.castShadow = true; pipe.receiveShadow = true;
-  group.add(pipe);
-  const stripeGeo = new THREE.TorusGeometry(radius, 0.05, 8, 32, Math.PI);
-  const stripeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  for (let s = 0; s < 3; s++) {
-    const stripe = new THREE.Mesh(stripeGeo, stripeMat);
-    stripe.position.set(0, radius, (s - 1) * length / 4); stripe.rotation.y = Math.PI / 2;
-    group.add(stripe);
-  }
-  scene.add(group);
-  elements.push(new TrackElement('halfpipe', new THREE.Vector3(x, y, z), group, { bounceFactor: 1.2, collisionRadius: radius + 2 }, null));
-}
-
-function addLoop(scene, world, x, y, z, radius, rotY, elements) {
-  const group = new THREE.Group();
-  group.position.set(x, y, z); group.rotation.y = rotY;
-  const torus = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.4, 16, 32), M.loop);
-  torus.position.y = radius; torus.castShadow = true; torus.receiveShadow = true;
-  group.add(torus);
-  for (let s = 0; s < 2; s++) {
-    const support = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, radius, 8), M.metalDark);
-    support.position.set((s === 0 ? -1 : 1) * radius * 0.75, radius / 2, 0);
-    support.castShadow = true; group.add(support);
-    const glow = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.05, 8, 16), M.lightGlow);
-    glow.position.set((s === 0 ? -1 : 1) * radius * 0.75, radius * 0.2, 0);
-    group.add(glow);
-  }
-  scene.add(group);
-  elements.push(new TrackElement('loop', new THREE.Vector3(x, y, z), group, { bounceFactor: 0.5, collisionRadius: radius + 2 }, null));
-}
-
-function addGrandstand(scene, world, x, y, z, rotY) {
-  const group = new THREE.Group();
-  group.position.set(x, y, z); group.rotation.y = rotY;
-  for (let row = 0; row < 6; row++) {
-    const step = new THREE.Mesh(new THREE.BoxGeometry(16, 0.35, 1.5), M.grandstand);
-    step.position.set(0, row * 0.75 + 0.5, -row * 1.2); step.castShadow = true; step.receiveShadow = true;
-    group.add(step);
-    for (let s = 0; s < 5; s++) {
-      const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffff44, 0xff44ff];
-      const person = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.45, 4, 8), new THREE.MeshStandardMaterial({ color: colors[s], roughness: 0.6 }));
-      person.position.set((s - 2) * 1.7, row * 0.75 + 0.9, -row * 1.2); person.castShadow = true;
-      group.add(person);
-    }
-  }
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(18, 0.2, 9), M.grandstandStruct);
-  roof.position.set(0, 5.2, -3); roof.castShadow = true;
-  group.add(roof);
-  for (const px of [-7, 7]) for (const pz of [-6, 0]) {
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 5, 8), M.grandstandStruct);
-    p.position.set(px, 2.5, pz); p.castShadow = true; group.add(p);
-  }
-  scene.add(group);
-  const body = new CANNON.Body({ mass: 0, material: physGround });
-  body.addShape(new CANNON.Box(new CANNON.Vec3(9, 2.6, 5)));
-  body.position.set(x, y + 2.6, z - 3); body.quaternion.setFromEuler(0, rotY, 0);
-  world.addBody(body);
-}
-
-function addLightTower(scene, x, y, z) {
-  const group = new THREE.Group(); group.position.set(x, y, z);
-  for (let leg = 0; leg < 4; leg++) {
-    const angle = (leg / 4) * Math.PI * 2;
-    const lx = Math.cos(angle) * 0.5, lz = Math.sin(angle) * 0.5;
-    const legMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 20, 8), M.metalDark);
-    legMesh.position.set(lx, 10, lz); legMesh.castShadow = true; group.add(legMesh);
-  }
-  const platform = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 3), M.metal);
-  platform.position.y = 19; group.add(platform);
-  for (let s = 0; s < 4; s++) {
-    const angle = (s / 4) * Math.PI * 2;
-    const light = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), M.lightGlow);
-    light.position.set(Math.cos(angle) * 1.2, 19.2, Math.sin(angle) * 1.2); group.add(light);
-    const spotLight = new THREE.SpotLight(0xffffcc, 3, 60, Math.PI / 6, 0.3, 0.5);
-    spotLight.position.copy(light.position);
-    spotLight.target.position.set(Math.cos(angle) * 30, 0, Math.sin(angle) * 30);
-    group.add(spotLight); group.add(spotLight.target);
-  }
-  scene.add(group);
-}
-
-function addLampPost(scene, x, y, z) {
-  const group = new THREE.Group(); group.position.set(x, y, z);
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.22, 6, 8), M.metalDark);
-  pole.position.y = 3; pole.castShadow = true; group.add(pole);
-  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), M.lightGlow);
-  glow.position.y = 6;
-  group.add(glow);
-  scene.add(group);
-}
-
-function addTree(scene, x, y, z) {
-  const group = new THREE.Group(); group.position.set(x, y, z);
-  const h = 4 + Math.random() * 4;
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, h, 8), M.trunk);
-  trunk.position.y = h / 2; trunk.castShadow = true; group.add(trunk);
-  const crownCount = 2 + Math.floor(Math.random() * 3);
-  for (let c = 0; c < crownCount; c++) {
-    const crown = new THREE.Mesh(new THREE.SphereGeometry(1.2 + Math.random() * 1.5, 8, 8), Math.random() > 0.5 ? M.leaves : M.leavesDark);
-    crown.position.set((Math.random() - 0.5) * 2, h * 0.7 + Math.random() * 2, (Math.random() - 0.5) * 2);
-    crown.castShadow = true; crown.receiveShadow = true; group.add(crown);
-  }
-  scene.add(group);
-}
-
-function addContainer(scene, world, x, y, z, obstacles) {
-  const group = new THREE.Group(); group.position.set(x, y, z); group.rotation.y = Math.random() * Math.PI;
-  group.userData.type = 'container';
-  const box = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 4), M.container);
-  box.position.y = 1; box.castShadow = true; box.receiveShadow = true; group.add(box);
-  const edgeMat = new THREE.MeshStandardMaterial({ color: 0xbb7722, roughness: 0.5, metalness: 0.5 });
-  for (const ey of [0, 2]) { const e = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.08, 4.1), edgeMat); e.position.y = ey; group.add(e); }
-  scene.add(group);
-  // Физическое тело
-  const body = new CANNON.Body({ mass: 0, material: physGround });
-  body.addShape(new CANNON.Box(new CANNON.Vec3(1, 1, 2)));
-  body.position.set(x, y + 1, z);
-  body.quaternion.copy(group.quaternion);
-  world.addBody(body);
-  obstacles.push(group);
-}
-
-function addBarrel(scene, world, x, y, z, obstacles) {
-  const group = new THREE.Group(); group.position.set(x, y, z);
-  group.userData.type = 'barrel';
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 1.3, 12), M.barrel);
-  barrel.position.y = 0.65; barrel.castShadow = true; barrel.receiveShadow = true; group.add(barrel);
-  const ringGeo = new THREE.TorusGeometry(0.62, 0.04, 8, 16);
-  const ringMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.4, metalness: 0.8 });
-  for (let r = 0; r < 2; r++) { const ring = new THREE.Mesh(ringGeo, ringMat); ring.position.y = 0.3 + r * 0.7; group.add(ring); }
-  scene.add(group);
-  // Физическое тело
-  const body = new CANNON.Body({ mass: 0, material: physGround });
-  body.addShape(new CANNON.Cylinder(0.6, 0.6, 1.3, 8));
-  body.position.set(x, y + 0.65, z);
-  world.addBody(body);
-  obstacles.push(group);
-}
-
-function addCrate(scene, world, x, y, z, obstacles) {
-  const group = new THREE.Group(); group.position.set(x, y, z);
-  group.userData.type = 'crate';
-  const crate = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.3, 1.3), M.crate);
-  crate.position.y = 0.65; crate.castShadow = true; crate.receiveShadow = true; group.add(crate);
-  const crossMat = new THREE.MeshStandardMaterial({ color: 0x886633, roughness: 0.6 });
-  const cx = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.08, 0.08), crossMat); cx.position.y = 0.65; group.add(cx);
-  const cz = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 1.4), crossMat); cz.position.y = 0.65; group.add(cz);
-  scene.add(group);
-  // Физическое тело
-  const body = new CANNON.Body({ mass: 0, material: physGround });
-  body.addShape(new CANNON.Box(new CANNON.Vec3(0.65, 0.65, 0.65)));
-  body.position.set(x, y + 0.65, z);
-  world.addBody(body);
-  obstacles.push(group);
-}
-
-function addBillboard(scene, x, y, z) {
-  const group = new THREE.Group(); group.position.set(x, y, z); group.rotation.y = Math.atan2(-x, -z);
-  for (const px of [-2, 2]) {
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, 6, 8), M.metalDark);
-    p.position.set(px, 3, 0); p.castShadow = true; group.add(p);
-  }
-  const board = new THREE.Mesh(new THREE.PlaneGeometry(4, 2.5), M.boardBg);
-  board.position.y = 5.5; board.castShadow = true; group.add(board);
-  const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(4, 2.5)), new THREE.LineBasicMaterial({ color: 0x00ffff }));
-  frame.position.y = 5.5; group.add(frame);
-  scene.add(group);
-}
-
-function addStartArch(scene, x, y, z, rotY) {
-  const group = new THREE.Group(); group.position.set(x, y, z); group.rotation.y = rotY;
-  for (const sx of [-6, 6]) {
-    const p = new THREE.Mesh(new THREE.BoxGeometry(1, 7, 1), M.arch);
-    p.position.set(sx, 3.5, 0); p.castShadow = true; group.add(p);
-  }
-  const topBar = new THREE.Mesh(new THREE.BoxGeometry(14, 1, 1), M.arch);
-  topBar.position.set(0, 7, 0); topBar.castShadow = true; group.add(topBar);
-  for (let l = 0; l < 7; l++) {
-    const light = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), l % 2 === 0 ? M.greenGlow : M.redGlow);
-    light.position.set((l - 3) * 2, 7.5, 0); group.add(light);
-  }
-  scene.add(group);
-}
-
-function addRampPlatform(scene, world, x, y, z, w, d, rotY, height, mat) {
-  const group = new THREE.Group(); group.position.set(x, y, z); group.rotation.y = rotY;
-  const ramp = new THREE.Mesh(new THREE.BoxGeometry(w, 0.25, d), mat);
-  ramp.position.set(0, height, -d / 2); ramp.rotation.x = -Math.atan2(height, d);
-  ramp.castShadow = true; ramp.receiveShadow = true; group.add(ramp);
-  scene.add(group);
-  const body = new CANNON.Body({ mass: 0, material: physGround });
-  const steps = 4;
-  for (let i = 0; i < steps; i++) {
-    const t = (i + 0.5) / steps;
-    body.addShape(new CANNON.Box(new CANNON.Vec3(w / 2, 0.2, d / steps / 2)), new CANNON.Vec3(0, height * (1 - t), -d * t + d / 2));
-  }
-  body.position.set(x, y, z); body.quaternion.setFromEuler(0, rotY, 0);
-  world.addBody(body);
-}
-
-// Стены по периметру арены
-function addWalls(scene, world, size) {
-  const half = size / 2;
-  const wallHeight = 30;
-  const wallThickness = 1;
-  const wallMat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.7, transparent: true, opacity: 0.25 });
-  
-  const wallPositions = [
-    { x: 0, z: -half, w: size + wallThickness * 2, d: wallThickness }, // север
-    { x: 0, z: half, w: size + wallThickness * 2, d: wallThickness },  // юг
-    { x: -half, z: 0, w: wallThickness, d: size },                     // запад
-    { x: half, z: 0, w: wallThickness, d: size },                      // восток
-  ];
-  
-  for (const wp of wallPositions) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(wp.w, wallHeight, wp.d), wallMat);
-    mesh.position.set(wp.x, wallHeight / 2, wp.z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    scene.add(mesh);
+    trackGroup.add(tunnel);
     
-    const body = new CANNON.Body({ mass: 0, material: physGround });
-    body.addShape(new CANNON.Box(new CANNON.Vec3(wp.w / 2, wallHeight / 2, wp.d / 2)));
-    body.position.set(wp.x, wallHeight / 2, wp.z);
-    world.addBody(body);
-  }
-}
-
-// ==================== ГЛАВНАЯ ФУНКЦИЯ ====================
-
-export function createTrack(scene, world) {
-  const W = CONFIG.world.trackWidth;
-  const obstacles = [];
-  const elements = [];
-
-  console.log('🏟️  Строим расширенную арену...');
-
-  // 1. Основная площадка — 4 асфальтовые зоны (217×217)
-  const arenaSize = 217;
-  const half = arenaSize / 2;
-  const asphaltTex1 = createConcreteTexture();
-  const asphaltTex2 = createAsphaltTexture(); 
-  // Зоны: асфальт + бетон вместо травы
-  const zones = [
-    { mat: new THREE.MeshStandardMaterial({ map: asphaltTex1, roughness: 0.7, color: 0xcccccc }), ox: -half/2, oz: -half/2 }, // NW
-    { mat: new THREE.MeshStandardMaterial({ map: asphaltTex2, roughness: 0.75, color: 0x888888 }), ox: half/2, oz: -half/2 }, // NE
-    { mat: new THREE.MeshStandardMaterial({ map: asphaltTex1, roughness: 0.7, color: 0xaaaaaa }), ox: -half/2, oz: half/2 }, // SW
-    { mat: new THREE.MeshStandardMaterial({ map: asphaltTex2, roughness: 0.75, color: 0x777777 }), ox: half/2, oz: half/2 }, // SE
-  ];
-  for (const zone of zones) {
-    const zGeo = new THREE.PlaneGeometry(half, half);
-    const zMesh = new THREE.Mesh(zGeo, zone.mat);
-    zMesh.rotation.x = -Math.PI / 2;
-    zMesh.position.set(zone.ox, -0.05, zone.oz);
-    zMesh.receiveShadow = true;
-    scene.add(zMesh);
-  }
-  // Разделительные линии между зонами
-  const dividerMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.4 });
-  for (const axis of ['x', 'z']) {
-    const div = new THREE.Mesh(new THREE.PlaneGeometry(axis === 'x' ? arenaSize : 0.3, axis === 'z' ? arenaSize : 0.3), dividerMat);
-    div.rotation.x = -Math.PI / 2;
-    div.position.set(0, 0.01, 0);
-    scene.add(div);
-  }
-
-  // Физический слой для поля
-  const arenaBody = new CANNON.Body({ mass: 0, material: physGround });
-  arenaBody.addShape(new CANNON.Box(new CANNON.Vec3(arenaSize / 2, 0.1, arenaSize / 2)));
-  arenaBody.position.set(0, 0, 0);
-  world.addBody(arenaBody);
-
-  // === ТРАВЯНЫЕ ОСТРОВКИ (ковровый стиль) ===
-  // Аккуратные, эстетичные, игрушечные — как на детском ковре с дорожками
-
-  // Три оттенка зелёного для разнообразия
-  const grassColors = [
-    new THREE.Color().setHSL(0.28, 0.6, 0.35), // травяной
-    new THREE.Color().setHSL(0.32, 0.55, 0.3), // тёмно-зелёный
-    new THREE.Color().setHSL(0.25, 0.65, 0.4), // светло-зелёный
-  ];
-
-  // Материал для "бортика" (толщина островка)
-  const sideMat = new THREE.MeshStandardMaterial({ 
-    color: 0x3a7a25, 
-    roughness: 0.8 
-  });
-
-  function createGrassIslandCute(scene, cx, cz, radiusX, radiusZ, color, rotationY = 0) {
-    // Эллиптическая форма с плавным краем
-    const shape = new THREE.Shape();
-    const segments = 24; // сглаженный круг
-    for (let i = 0; i <= segments; i++) {
-      const angle = (i / segments) * Math.PI * 2;
-      const x = Math.cos(angle) * radiusX;
-      const y = Math.sin(angle) * radiusZ;
-      if (i === 0) shape.moveTo(x, y);
-      else shape.lineTo(x, y);
-    }
-    
-    // Верхняя плоскость с текстурой
-    const topMat = new THREE.MeshStandardMaterial({ 
-      map: grassTex, 
-      roughness: 0.9,
-      color: color,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-      polygonOffsetUnits: -2
+    // Физика для туннеля
+    const tunnelShape = new CANNON.Box(new CANNON.Vec3(6, 7.5, 7.5));
+    const tunnelBody = new CANNON.Body({
+      mass: 0,
+      shape: tunnelShape,
+      position: new CANNON.Vec3(x, 7.5, z)
     });
+    world.addBody(tunnelBody);
     
-    const geo = new THREE.ShapeGeometry(shape);
-    const top = new THREE.Mesh(geo, topMat);
-    top.rotation.x = -Math.PI / 2;
-    top.position.set(cx, 0.04, cz);
-    top.rotation.y = rotationY;
-    top.receiveShadow = true;
-    top.castShadow = true;
-    scene.add(top);
-    
-    // Толщина (бортик) — придаёт объём как на детском коврике
-    const sideGeo = new THREE.ShapeGeometry(shape);
-    const sideMesh = new THREE.Mesh(sideGeo, sideMat);
-    sideMesh.rotation.x = -Math.PI / 2;
-    sideMesh.position.set(cx, -0.06, cz);
-    sideMesh.rotation.y = rotationY;
-    sideMesh.receiveShadow = true;
-    scene.add(sideMesh);
-    
-    return top;
-  }
-
-  // Размещаем островки по краям арены в виде аккуратных газонов
-  // В центре — дорожная сеть, по краям — островки между дорогами и стенами
-  const islandDefs = [
-    // Большие островки по углам арены (эллиптические)
-    { x: -68, z: -68, rx: 14, rz: 10, color: 0 },
-    { x: 68, z: -68, rx: 14, rz: 10, color: 1 },
-    { x: -68, z: 68, rx: 14, rz: 10, color: 2 },
-    { x: 68, z: 68, rx: 14, rz: 10, color: 0 },
-    
-    // Вдоль северного края
-    { x: -40, z: -82, rx: 12, rz: 7, color: 1, rot: 0.2 },
-    { x: 0, z: -85, rx: 14, rz: 7, color: 2 },
-    { x: 40, z: -82, rx: 12, rz: 7, color: 0, rot: -0.2 },
-    
-    // Вдоль южного края
-    { x: -40, z: 82, rx: 12, rz: 7, color: 2, rot: -0.2 },
-    { x: 0, z: 85, rx: 14, rz: 7, color: 0 },
-    { x: 40, z: 82, rx: 12, rz: 7, color: 1, rot: 0.2 },
-    
-    // Вдоль западного края
-    { x: -82, z: -40, rx: 7, rz: 12, color: 0, rot: 0.3 },
-    { x: -85, z: 0, rx: 7, rz: 14, color: 1 },
-    { x: -82, z: 40, rx: 7, rz: 12, color: 2, rot: -0.3 },
-    
-    // Вдоль восточного края
-    { x: 82, z: -40, rx: 7, rz: 12, color: 1, rot: -0.3 },
-    { x: 85, z: 0, rx: 7, rz: 14, color: 2 },
-    { x: 82, z: 40, rx: 7, rz: 12, color: 0, rot: 0.3 },
-    
-    // Маленькие округлые островки между крупными
-    { x: -55, z: -55, rx: 5, rz: 4, color: 2, rot: 0.5 },
-    { x: 55, z: -55, rx: 5, rz: 4, color: 0, rot: -0.4 },
-    { x: -55, z: 55, rx: 5, rz: 4, color: 1, rot: 0.6 },
-    { x: 55, z: 55, rx: 5, rz: 4, color: 0, rot: 0.3 },
-    
-    // Островки между дорожными лучами (внутренняя зона)
-    { x: -30, z: -55, rx: 4, rz: 5, color: 1, rot: 0.8 },
-    { x: 30, z: -55, rx: 4, rz: 5, color: 2, rot: -0.7 },
-    { x: -30, z: 55, rx: 4, rz: 5, color: 0, rot: 0.9 },
-    { x: 30, z: 55, rx: 4, rz: 5, color: 1, rot: -0.5 },
-    { x: -55, z: -30, rx: 5, rz: 4, color: 2, rot: 0.4 },
-    { x: 55, z: -30, rx: 5, rz: 4, color: 0, rot: -0.6 },
-    { x: -55, z: 30, rx: 5, rz: 4, color: 1, rot: 0.7 },
-    { x: 55, z: 30, rx: 5, rz: 4, color: 0, rot: -0.3 },
-  ];
-
-  for (const def of islandDefs) {
-    const color = grassColors[def.color % grassColors.length];
-    createGrassIslandCute(scene, def.x, def.z, def.rx, def.rz, color, def.rot || 0);
-  }
-
-  // Стены по периметру
-  addWalls(scene, world, arenaSize);
-
-  // 2. Дорожная сеть
-  const outerRing = [
-    new THREE.Vector3(-21.7, 0, -21.7), new THREE.Vector3(21.7, 0, -21.7),
-    new THREE.Vector3(21.7, 0, 21.7), new THREE.Vector3(-21.7, 0, 21.7), new THREE.Vector3(-21.7, 0, -21.7),
-  ];
-  addRoad(scene, outerRing, W, world, 0.01);
-  
-  const innerCircle = [];
-  for (let i = 0; i <= 64; i++) { const a = (i / 64) * Math.PI * 2; innerCircle.push(new THREE.Vector3(Math.cos(a) * 21.7, 0, Math.sin(a) * 21.7)); }
-  addRoad(scene, innerCircle, W, world, 0.015);
-  
-  addRoad(scene, [new THREE.Vector3(-21.7, 0, -21.7), new THREE.Vector3(0, 0, 0), new THREE.Vector3(21.7, 0, 21.7)], W * 0.8, world, 0.02);
-  addRoad(scene, [new THREE.Vector3(21.7, 0, -21.7), new THREE.Vector3(0, 0, 0), new THREE.Vector3(-21.7, 0, 21.7)], W * 0.8, world, 0.025);
-  
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    addRoad(scene, [new THREE.Vector3(0, 0, 0), new THREE.Vector3(Math.cos(a) * 28.9, 0, Math.sin(a) * 28.9)], W * 0.6, world, 0.03 + i * 0.001);
-  }
-
-  // Разметка на внешнем кольце
-  const outerRingMarkings = [
-    new THREE.Vector3(-83.1, 0, -83.1), 
-    new THREE.Vector3(83.1, 0, -83.1), 
-    new THREE.Vector3(83.1, 0, 83.1), 
-    new THREE.Vector3(-83.1, 0, 83.1), 
-    new THREE.Vector3(-83.1, 0, -83.1)
-  ];
-  addRoadMarkings(scene, outerRingMarkings, 1.2);
-
-  // Разметка на внутреннем кольце
-  const innerMarkings = [];
-  for (let i = 0; i <= 40; i++) { const a = (i / 40) * Math.PI * 2; innerMarkings.push(new THREE.Vector3(Math.cos(a) * 54.2, 0, Math.sin(a) * 54.2)); }
-  addRoadMarkings(scene, innerMarkings, 1.0);
-  for (let i = 0; i < 6; i++) {
-    const gx = (Math.random() - 0.5) * 57.8, gz = (Math.random() - 0.5) * 57.8;
-    if (Math.abs(gx) < 17 && Math.abs(gz) < 17) continue;
-    const gp = new THREE.Mesh(new THREE.PlaneGeometry(4 + Math.random() * 3, 3 + Math.random() * 2), M.gravel);
-    gp.rotation.x = -Math.PI / 2; gp.position.set(gx, 0.005, gz); gp.receiveShadow = true; scene.add(gp);
-  }
-
-  // 4. Петли
-  addLoop(scene, world, -21.7, 0, 32.5, 3, 0, elements);
-  addLoop(scene, world, 21.7, 0, -32.5, 3, Math.PI, elements);
-
-    for (let i = 0; i < 20; i++) { const a = (i / 20) * Math.PI * 2; addLampPost(scene, Math.cos(a) * 36.1, 0, Math.sin(a) * 36.1); }
-  
-  addStartArch(scene, 0, 0, -61.4, Math.PI);
-
-  // 7. Сегменты для lapCounter
-  const trackPoints = [];
-  for (let i = 0; i < 40; i++) {
-    const a = (i / 40) * Math.PI * 2;
-    trackPoints.push(new THREE.Vector3(Math.cos(a) * 10.8, 0, Math.sin(a) * 10.8));
-  }
-
-  console.log('✅ Компактная 4-зонная арена готова!');
-
-  // Создаём точки спавна по кругу для всех машин (игрок + боты)
-  const totalCars = 8; // 1 игрок + 7 ботов
-  const spawnRadius = 60; // ближе к центру, чтобы не застревать в стенах
-  const spawnPoints = [];
-  for (let i = 0; i < totalCars; i++) {
-    const angle = (i / totalCars) * Math.PI * 2;
-    spawnPoints.push({
-      position: new THREE.Vector3(Math.cos(angle) * spawnRadius, 0.5, Math.sin(angle) * spawnRadius),
-      rotation: angle + Math.PI // смотрит лицом к центру
+    trackElements.push({
+      type: 'tunnel',
+      visual: tunnel,
+      physics: tunnelBody,
+      collisionRadius: 8,
+      bounceFactor: 0.8
     });
   }
 
-  // Первая точка — для игрока
-  return { 
-    segments: trackPoints, 
-    spawnPos: spawnPoints[0].position, 
-    spawnRot: { y: spawnPoints[0].rotation }, 
-    spawnPoints, // массив всех точек спавна
-    obstacles, 
-    elements 
+  // Создаём декоративные элементы
+  for (let i = 0; i < 50; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 100 + Math.random() * 50;
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
+    
+    // Деревья
+    const treeGeometry = new THREE.ConeGeometry(3, 8, 8);
+    const treeMaterial = new THREE.MeshStandardMaterial({
+      color: 0x228B22,
+      roughness: 0.8,
+      metalness: 0.1
+    });
+    const tree = new THREE.Mesh(treeGeometry, treeMaterial);
+    tree.position.set(x, 4, z);
+    tree.castShadow = true;
+    tree.receiveShadow = true;
+    trackGroup.add(tree);
+    
+    // Физика для деревьев
+    const treeShape = new CANNON.Box(new CANNON.Vec3(1.5, 4, 1.5));
+    const treeBody = new CANNON.Body({
+      mass: 0,
+      shape: treeShape,
+      position: new CANNON.Vec3(x, 4, z)
+    });
+    world.addBody(treeBody);
+  }
+
+  // Возвращаем все необходимые данные
+  return {
+    segments: segments,
+    spawnPoints: spawnPoints,
+    obstacles: obstacles,
+    elements: trackElements,
+    spawnPos: new THREE.Vector3(0, 1.5, 0),
+    spawnRot: new THREE.Vector3(0, 0, 0)
   };
 }
