@@ -19,8 +19,14 @@ export const CONFIG = {
     restitution: 0.1
   },
   world: {
-    size: 500,
+    size: 217,
     trackWidth: 20
+  },
+  camera: {
+    height: 3.5,
+    distance: 8,
+    lerpSpeed: 0.08,
+    speedZoomFactor: 0.4
   },
   colors: {
     sky: 0x87CEEB,
@@ -34,11 +40,5 @@ export const CONFIG = {
       trunk: 0x6b4226,
       leaves: 0x2d8c2d
     }
-  },
-  camera: {
-    height: 4,
-    distance: 9,
-    lerpSpeed: 0.08,
-    speedZoomFactor: 0.4
   }
 };

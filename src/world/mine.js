@@ -1,53 +1,56 @@
 import * as THREE from 'three';
 
 /**
+ * Кэшированные геометрии и материалы для Mine
+ */
+const _mineGeometries = {
+  body: new THREE.SphereGeometry(0.8, 8, 8),
+  spike: new THREE.ConeGeometry(0.15, 0.4, 4)
+};
+
+const _mineMaterials = {
+  body: new THREE.MeshPhongMaterial({
+    color: 0xff8800,
+    emissive: 0xff4400,
+    emissiveIntensity: 0.4,
+    transparent: true,
+    opacity: 0.9
+  }),
+  spike: new THREE.MeshPhongMaterial({
+    color: 0xff4400,
+    emissive: 0xff2200,
+    emissiveIntensity: 0.5
+  })
+};
+
+/**
  * Мина - ставится на трассе и взрывается при столкновении
  */
 export class Mine {
   constructor(position, scene) {
     this.scene = scene;
     this.position = position.clone();
-    this.position.y = 0.2; // Чуть выше земли
+    this.position.y = 0.2;
     this.alive = true;
-    this.time = Date.now();
-    this.lifetime = 30000; // 30 секунд
+    this._timeAccum = 0;
+    this.lifetime = 30; // 30 секунд
 
     this.mesh = this._createMesh();
     this.mesh.position.copy(this.position);
     scene.add(this.mesh);
 
-    // Свет
     this.light = new THREE.PointLight(0xff8800, 0.5, 8);
     this.light.position.copy(this.position);
     this.light.position.y += 0.5;
     scene.add(this.light);
-
-    console.log('Mine placed at (' + position.x.toFixed(0) + ', ' + position.z.toFixed(0) + ')');
   }
 
   _createMesh() {
-    // Основная сфера мины
-    const bodyGeom = new THREE.SphereGeometry(0.8, 12, 12);
-    const bodyMat = new THREE.MeshPhongMaterial({
-      color: 0xff8800,
-      emissive: 0xff4400,
-      emissiveIntensity: 0.4,
-      transparent: true,
-      opacity: 0.9
-    });
-    const body = new THREE.Mesh(bodyGeom, bodyMat);
+    const body = new THREE.Mesh(_mineGeometries.body, _mineMaterials.body);
 
-    // Шипы
     const spikes = new THREE.Group();
-    const spikeGeom = new THREE.ConeGeometry(0.15, 0.4, 4);
-    const spikeMat = new THREE.MeshPhongMaterial({
-      color: 0xff4400,
-      emissive: 0xff2200,
-      emissiveIntensity: 0.5
-    });
-
     for (let i = 0; i < 8; i++) {
-      const spike = new THREE.Mesh(spikeGeom, spikeMat);
+      const spike = new THREE.Mesh(_mineGeometries.spike, _mineMaterials.spike);
       const angle = (i / 8) * Math.PI * 2;
       spike.position.set(Math.cos(angle) * 0.8, 0, Math.sin(angle) * 0.8);
       spike.rotation.x = Math.PI / 2;
@@ -65,32 +68,29 @@ export class Mine {
   update(dt) {
     if (!this.alive) return;
 
+    this._timeAccum += dt;
+
     // Пульсация
-    const scale = 1 + Math.sin(Date.now() * 0.005) * 0.1;
+    const scale = 1 + Math.sin(this._timeAccum * 5) * 0.1;
     this.mesh.scale.set(scale, scale, scale);
 
     // Свет тоже пульсирует
-    this.light.intensity = 0.4 + Math.sin(Date.now() * 0.005) * 0.2;
+    this.light.intensity = 0.4 + Math.sin(this._timeAccum * 5) * 0.2;
 
     // Мина исчезает через время
-    if (Date.now() - this.time > this.lifetime) {
+    if (this._timeAccum > this.lifetime) {
       this.destroy();
       return true;
     }
     return false;
   }
 
-  /**
-   * Проверка столкновения с машиной
-   */
   checkCollision(car, threshold = 2.5) {
     if (!this.alive) return false;
     
-    // Check if car has active shield
     if (car.hasActiveShield) {
       if (typeof car.hasActiveShield === 'function' && car.hasActiveShield()) {
-        
-        return false; // Don't trigger explosion if shield is active
+        return false;
       }
     }
     
@@ -98,21 +98,14 @@ export class Mine {
     return dist < threshold;
   }
 
-  /**
-   * Взрыв мины
-   */
   explode() {
     if (!this.alive) return;
     this.alive = false;
 
-    console.log('Mine exploded!');
-
-    // Используем пул эффектов для взрыва
     if (window.effectsPool) {
       window.effectsPool.createExplosion(this.position, 25, 'mine');
       window.effectsPool.createFlash(this.position, 0xff8800, 0.5, 2);
     } else {
-      // Fallback если пул не доступен
       const particleCount = 25;
       const particles = [];
 
@@ -135,7 +128,6 @@ export class Mine {
         });
       }
 
-      // Вспышка
       const flashGeom = new THREE.SphereGeometry(2, 8, 8);
       const flashMat = new THREE.MeshBasicMaterial({
         color: 0xff8800,
@@ -147,30 +139,25 @@ export class Mine {
       flash.position.copy(this.position);
       this.scene.add(flash);
 
-      // Анимация взрыва
       let frame = 0;
       const animateExplosion = () => {
         frame++;
         let allDead = true;
 
-        // Частицы
         for (const p of particles) {
           p.mesh.position.add(p.velocity.clone().multiplyScalar(0.016));
           p.velocity.y -= 9.8 * 0.016;
           p.life -= 0.04;
           p.mesh.scale.setScalar(p.life);
-
           if (p.life > 0) allDead = false;
         }
 
-        // Вспышка
         flash.material.opacity -= 0.05;
         flash.scale.multiplyScalar(1.05);
 
         if ((!allDead || flash.material.opacity > 0) && frame < 50) {
           requestAnimationFrame(animateExplosion);
         } else {
-          // Убираем всё
           for (const p of particles) {
             this.scene.remove(p.mesh);
             p.mesh.geometry.dispose();

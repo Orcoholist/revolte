@@ -8,11 +8,12 @@ import { BotController } from './botController.js';
  * каждый бот гонится по чекпоинтам.
  */
 export class BotManager {
-  constructor(scene, world, wheelMat, trackSegments) {
+  constructor(scene, world, wheelMat, trackSegments, spawnPoints) {
     this.scene = scene;
     this.world = world;
     this.wheelMat = wheelMat;
     this.trackSegments = trackSegments;
+    this.spawnPoints = spawnPoints || []; // массив точек спавна по кругу
     this.bots = [];
     this.raceResults = []; // Результаты гонки
 
@@ -41,9 +42,9 @@ export class BotManager {
     const cps = [];
     for (let i = 0; i < count; i++) {
       const cp = new THREE.Vector3(
-        (Math.random() - 0.5) * 240,
+        (Math.random() - 0.5) * 100,
         0,
-        (Math.random() - 0.5) * 240
+        (Math.random() - 0.5) * 100
       );
       cps.push(cp);
     }
@@ -91,38 +92,41 @@ export class BotManager {
     recolorCarModel(carMesh, botColor, 0x222222);
     this.scene.add(carMesh);
     
-    // console.log('Bot ' + index + ': color 0x' + botColor.toString(16).padStart(6, '0'));
-
     const wheelMeshes = createWheelMeshes();
     wheelMeshes.forEach(w => this.scene.add(w));
 
     // Физика
     const { chassisBody, vehicle } = createCarPhysics(this.world, this.wheelMat);
 
-    // Позиция спауна бота на краю арены (симметрично)
-    const startPos = this._getEdgeSpawnPosition(index, total);
-
-    // Поворот бота – направлен к центру арены
-    const dirToCenter = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), startPos).normalize();
-    const rotY = Math.atan2(dirToCenter.x, dirToCenter.z);
+    // Позиция спауна бота из круга (индекс 0 — игрок, боты с 1)
+    const spawnIdx = index + 1;
+    let startPos, rotY;
+    if (this.spawnPoints && this.spawnPoints.length > spawnIdx) {
+      const sp = this.spawnPoints[spawnIdx];
+      startPos = sp.position.clone();
+      startPos.y = 1.5;
+      rotY = sp.rotation;
+    } else {
+      // fallback на старую логику
+      startPos = this._getEdgeSpawnPosition(index, total);
+      const dirToCenter = new THREE.Vector3().subVectors(new THREE.Vector3(0, 0, 0), startPos).normalize();
+      rotY = Math.atan2(dirToCenter.x, dirToCenter.z);
+    }
 
     chassisBody.position.set(startPos.x, startPos.y, startPos.z);
     chassisBody.quaternion.setFromEuler(0, rotY, 0);
 
-    // AI контроллер с УНИКАЛЬНЫМ маршрутом
-    const startCp = 0; // Уникальный маршрут уже начинается с нужной точки
-    
     // Создаём УНИКАЛЬНЫЙ маршрут для каждого бота
-    const uniqueRoute = this._createUniqueRouteForBot(index);
+    // Первый чекпоинт — в противоположном направлении от носа
+    const uniqueRoute = this._createUniqueRouteForBot(index, startPos, rotY);
     
-    // console.log('Bot ' + index + ': spawn (' + startPos.x.toFixed(1) + ', ' + startPos.y.toFixed(1) + ', ' + startPos.z.toFixed(1) + '), target checkpoint ' + startCp);
     const bot = new BotController(
       chassisBody,
       vehicle,
       carMesh,
       wheelMeshes,
       uniqueRoute,
-      startCp,
+      0, // startCp = 0 (первый чекпоинт — противоположно носу)
       index
     );
 
@@ -130,7 +134,7 @@ export class BotManager {
       controller: bot, 
       spawnPos: startPos, 
       spawnRot: rotY, 
-      startCp, 
+      startCp: 0, 
       name: this.botNames[index % this.botNames.length],
       items: [] // Initialize items array
     });
@@ -138,9 +142,26 @@ export class BotManager {
 
   /**
    * Создаёт УНИКАЛЬНЫЙ маршрут для каждого бота!
-   * Бот следует по перемешанным чекпоинтам трассы с уникальной случайной последовательностью для каждого бота.
+   * Первый чекпоинт — в противоположном направлении от носа машины.
+   * Остальные — случайно перемешаны.
    */
-  _createUniqueRouteForBot(botIndex) {
+  _createUniqueRouteForBot(botIndex, startPos, rotY) {
+    // Направление носа машины (в локальных координатах это -Z)
+    const noseDir = new THREE.Vector3(0, 0, -1);
+    noseDir.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY);
+    noseDir.normalize();
+    
+    // Противоположное направление — туда ставим первый чекпоинт
+    const oppositeDir = noseDir.clone().negate();
+    
+    // Первый чекпоинт на расстоянии 50-70 единиц в противоположном направлении
+    const firstCpDist = 50 + Math.random() * 20;
+    const firstCheckpoint = new THREE.Vector3(
+      startPos.x + oppositeDir.x * firstCpDist,
+      0,
+      startPos.z + oppositeDir.z * firstCpDist
+    );
+    
     // Копируем оригинальные чекпоинты
     const originalCheckpoints = [...this.checkpoints];
     
@@ -156,7 +177,8 @@ export class BotManager {
       return newCp;
     });
     
-    return randomizedCheckpoints;
+    // Первый чекпоинт — противоположно носу, остальные — случайно
+    return [firstCheckpoint, ...randomizedCheckpoints];
   }
   
   /**
@@ -179,8 +201,17 @@ export class BotManager {
   }
 
   update(dt) {
+    const teleportRadius = 120;
     for (const bot of this.bots) {
       if (bot.controller && bot.controller.chassisBody && bot.controller.vehicle) {
+        const pos = bot.controller.chassisBody.position;
+        // Телепорт бота обратно на спавн при выходе за границы
+        if (pos.x * pos.x + pos.z * pos.z > teleportRadius * teleportRadius || pos.y < -20) {
+          bot.controller.reset(bot.spawnPos, bot.spawnRot, bot.startCp);
+          bot.controller.chassisBody.velocity.set(0, 0, 0);
+          bot.controller.chassisBody.angularVelocity.set(0, 0, 0);
+          console.log('🤖 Бот вышел за границы — телепорт на старт');
+        }
         bot.controller.update(dt);
       } else {
         console.warn('Invalid bot controller detected');

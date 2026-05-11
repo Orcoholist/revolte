@@ -5,7 +5,7 @@ import * as THREE from 'three';
  * Визуально — полупрозрачное тёмное пятно на земле.
  */
 export class Oil {
-  constructor(position, scene) {
+  constructor(position, scene, owner = null) {
     this.scene = scene;
     this.position = position.clone();
     this.position.y = 0.01;
@@ -14,6 +14,7 @@ export class Oil {
     this.spawnTime = Date.now();
     this.radius = 4;
     this.stunDuration = 1000; // потеря управления на 1 сек
+    this.owner = owner; // кто поставил масло (CarController или bot controller)
     
     this._createVisual();
   }

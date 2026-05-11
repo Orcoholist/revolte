@@ -5,17 +5,17 @@ export class Rocket {
     this.scene = scene;
     this.botManager = botManager;
     this.active = true;
-    this.maxDistance = 120; // Увеличил дальность
+    this.maxDistance = 120;
     this.distanceTraveled = 0;
-    this.speed = 90; // Увеличил скорость
+    this.speed = 90;
     this.alive = true;
-    this.turnSpeed = 0.08; // Скорость поворота к цели
+    this.turnSpeed = 0.08;
 
     const forward = new THREE.Vector3(0, 0, -1);
     forward.applyQuaternion(carMesh.quaternion);
 
     this.position = carMesh.position.clone().add(forward.clone().multiplyScalar(2));
-    this.position.y += 1.2; // Чуть выше
+    this.position.y += 1.2;
 
     this.direction = forward.clone().normalize();
 
@@ -28,10 +28,13 @@ export class Rocket {
     this.light.position.copy(this.position);
     scene.add(this.light);
     
-    // Добавляем трейл (след) из частиц
+    // Трейл (след) — используем пул переиспользуемых точек
     this.trail = [];
-    this.trailInterval = 0.02; // Интервал между точками трейла
+    this.trailPool = [];
+    this.maxTrailPoints = 30;
+    this.trailInterval = 0.02;
     this.lastTrailTime = 0;
+    this._preallocateTrail();
 
     this.target = null;
     this.targetBot = null;
@@ -65,22 +68,52 @@ export class Rocket {
 
     return group;
   }
-  
-  // Создание точки трейла
-  _createTrailPoint() {
+
+  /**
+   * Предсоздаём пул точек трейла
+   */
+  _preallocateTrail() {
     const trailGeom = new THREE.SphereGeometry(0.1, 4, 4);
     const trailMat = new THREE.MeshBasicMaterial({
       color: 0xff6600,
       transparent: true,
       opacity: 0.6
     });
-    const trailMesh = new THREE.Mesh(trailGeom, trailMat);
-    trailMesh.position.copy(this.position);
-    this.scene.add(trailMesh);
-    this.trail.push({
-      mesh: trailMesh,
-      life: 1.0
-    });
+
+    for (let i = 0; i < this.maxTrailPoints; i++) {
+      const trailMesh = new THREE.Mesh(trailGeom, trailMat);
+      trailMesh.visible = false;
+      this.scene.add(trailMesh);
+      this.trailPool.push({
+        mesh: trailMesh,
+        life: 0
+      });
+    }
+  }
+
+  /**
+   * Получить точку трейла из пула
+   */
+  _getTrailPoint() {
+    if (this.trailPool.length === 0) return null;
+    const point = this.trailPool.pop();
+    point.mesh.visible = true;
+    point.mesh.position.copy(this.position);
+    point.life = 1.0;
+    return point;
+  }
+
+  /**
+   * Вернуть точку трейла в пул
+   */
+  _returnTrailPoint(point) {
+    point.mesh.visible = false;
+    point.life = 0;
+    if (this.trailPool.length < this.maxTrailPoints) {
+      this.trailPool.push(point);
+    } else {
+      this.scene.remove(point.mesh);
+    }
   }
 
   update(dt) {
@@ -108,14 +141,12 @@ export class Rocket {
       this.direction.lerp(toTarget, this.turnSpeed);
     }
 
-    // Нормализуем направление перед движением
     this.direction.normalize();
 
     const movement = this.direction.clone().multiplyScalar(this.speed * dt);
     this.position.add(movement);
     this.mesh.position.copy(this.position);
 
-    // Ориентируем ракету в направлении полёта
     const lookTarget = this.position.clone().add(this.direction);
     this.mesh.lookAt(lookTarget);
 
@@ -123,10 +154,13 @@ export class Rocket {
 
     this.distanceTraveled += movement.length();
 
-    // Создаем точки трейла
+    // Создаем точки трейла из пула
     this.lastTrailTime += dt;
     if (this.lastTrailTime >= this.trailInterval) {
-      this._createTrailPoint();
+      const point = this._getTrailPoint();
+      if (point) {
+        this.trail.push(point);
+      }
       this.lastTrailTime = 0;
     }
 
@@ -137,7 +171,7 @@ export class Rocket {
       point.mesh.scale.setScalar(point.life);
       point.mesh.material.opacity = point.life * 0.6;
       if (point.life <= 0) {
-        this.scene.remove(point.mesh);
+        this._returnTrailPoint(point);
         this.trail.splice(i, 1);
       }
     }
@@ -148,68 +182,55 @@ export class Rocket {
   }
 
   _findTarget() {
-    // Если уже есть цель и она валидна, продолжаем преследование
     if (this.isTargetingPlayer) {
-      // Цель - игрок
       if (window.car && window.car.chassisBody) {
         const playerPos = window.car.chassisBody.position;
         const dist = this.position.distanceTo(playerPos);
-        if (dist < 80) { // Если цель в радиусе 80 метров, продолжаем преследование
+        if (dist < 80) {
           this.target = playerPos.clone();
           return;
         }
       }
     } else if (this.targetBot && this.targetBot.controller && this.targetBot.controller.chassisBody) {
       const dist = this.position.distanceTo(this.targetBot.controller.chassisBody.position);
-      if (dist < 80) { // Если цель в радиусе 80 метров, продолжаем преследование
+      if (dist < 80) {
         return;
       }
     }
 
-    // Ищем новую цель
     let closestDist = Infinity;
     let closestBot = null;
     let closestPlayer = false;
 
-    // Определяем, кто запустил ракету (через приблизительное сравнение позиции)
     const launcherIsPlayer = window.car && this.position.distanceTo(window.car.chassisBody.position) < 5;
     
-    // Проверяем игрока
     if (window.car && window.car.chassisBody && !launcherIsPlayer) {
       const playerPos = window.car.chassisBody.position;
       const dist = this.position.distanceTo(playerPos);
-
       const forward = this.direction.clone();
       const toPlayer = new THREE.Vector3().subVectors(playerPos, this.position);
       toPlayer.y = 0;
       const dot = forward.dot(toPlayer.normalize());
 
-      // Проверяем игрока как потенциальную цель (только если ракета НЕ была запущена игроком)
       if (dist < closestDist && (dot > 0.3 || dist < 40) && dist < 80) {
         closestDist = dist;
         closestPlayer = true;
       }
     }
 
-    // Проверяем ботов
     for (const bot of this.botManager.bots) {
-      // Пропускаем бота, который, возможно, запустил эту ракету (приблизительно)
       const launcherIsThisBot = bot.controller && this.position.distanceTo(bot.controller.chassisBody.position) < 5;
-      if (launcherIsThisBot) {
-        continue;
-      }
+      if (launcherIsThisBot) continue;
       
       if (!bot.controller || !bot.controller.chassisBody) continue;
       
       const botPos = bot.controller.chassisBody.position;
       const dist = this.position.distanceTo(botPos);
-
       const forward = this.direction.clone();
       const toBot = new THREE.Vector3().subVectors(botPos, this.position);
       toBot.y = 0;
       const dot = forward.dot(toBot.normalize());
 
-      // Ищем ближайшего бота впереди (dot > 0.3) или любого бота в радиусе 40 метров
       if (dist < closestDist && (dot > 0.3 || dist < 40) && dist < 80) {
         closestDist = dist;
         closestBot = bot;
@@ -232,49 +253,38 @@ export class Rocket {
     console.log('Rocket hit!');
 
     if (this.isTargetingPlayer && window.car) {
-      // Check if player has active shield
       if (window.car.hasActiveShield()) {
         console.log('Rocket blocked by player shield!');
         this._explode();
         return;
       }
       
-      // Попали в игрока
       const car = window.car;
-      // Сбрасываем скорость игрока
       car.chassisBody.velocity.set(0, 0, 0);
       car.chassisBody.angularVelocity.set(0, 0, 0);
-      // Переворачиваем игрока
       car.flipOver();
       this._explode();
     } else if (this.targetBot && this.targetBot.controller) {
-      // Check if bot has active shield
       if (this.targetBot.controller.hasActiveShield()) {
         console.log('Rocket blocked by bot shield!');
         this._explode();
         return;
       }
       
-      // Попали в бота
       const bot = this.targetBot;
-      // Сбрасываем скорость бота
       bot.controller.chassisBody.velocity.set(0, 0, 0);
       bot.controller.chassisBody.angularVelocity.set(0, 0, 0);
-      // Переворачиваем бота
       bot.controller.flipOver();
       this._explode();
     } else {
-      // Если цели нет (попали в препятствие или землю), просто взрываем
       this._explode();
     }
   }
 
   _explode() {
-    // Используем пул эффектов для взрыва
     if (window.effectsPool) {
       window.effectsPool.createExplosion(this.position, 30, 'orange');
     } else {
-      // Fallback если пул не доступен
       const particleCount = 30;
       const particles = [];
 
@@ -307,7 +317,6 @@ export class Rocket {
           p.velocity.y -= 9.8 * 0.016;
           p.life -= 0.03;
           p.mesh.scale.setScalar(p.life);
-
           if (p.life > 0) allDead = false;
         }
 
@@ -336,10 +345,15 @@ export class Rocket {
     if (this.light) {
       this.scene.remove(this.light);
     }
-    // Удаляем трейл
+    // Возвращаем все точки трейла в пул
     for (const point of this.trail) {
-      this.scene.remove(point.mesh);
+      this._returnTrailPoint(point);
     }
     this.trail = [];
+    // Удаляем оставшиеся точки из пула
+    for (const point of this.trailPool) {
+      this.scene.remove(point.mesh);
+    }
+    this.trailPool = [];
   }
 }

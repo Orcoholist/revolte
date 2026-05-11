@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
 import { CONFIG } from './engine/config.js';
 import { createRenderer, createScene, createCamera, createLighting } from './engine/renderer.js';
 import { createPhysicsWorld } from './engine/physics.js';
@@ -23,7 +24,7 @@ const camera = createCamera();
 createLighting(scene);
 
 // Передаём scene в particleSystem
-particleSystem.scene = scene;
+particleSystem.setScene(scene);
 
 const { world, groundMat, wheelMat } = createPhysicsWorld();
 
@@ -63,7 +64,8 @@ window.lapCounter = new LapCounter(
       showResults();
     }
   },
-  scene
+  scene,
+  track.spawnRot
 );
 
 // HUD (создаём сразу, не зависит от модели)
@@ -153,8 +155,8 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
   window.car = new CarController(chassisBody, vehicle, carMesh, wheelMeshes);
   window.car.reset(track.spawnPos, track.spawnRot.y);
 
-  // Создаём AI-ботов (случайные позиции на трассе, свои чекпоинты)
-  window.botManager = new BotManager(scene, world, wheelMat, track.segments);
+  // Создаём AI-ботов (позиции по кругу, свои чекпоинты)
+  window.botManager = new BotManager(scene, world, wheelMat, track.segments, track.spawnPoints);
   window.botManager.spawnBots(7); // Increased from 5 to 7 bots
 
   // Создаём систему предметов (как в Revolt!)
@@ -183,76 +185,6 @@ preloadCarModel('models/cars/subaru_impreza_rally_car_99_gt4.glb', (model) => {
 
   // Telegram
   initTelegram();
-
-  // ==================== ВИЗУАЛЬНЫЕ ЭФФЕКТЫ ПРИ ИСПОЛЬЗОВАНИИ ПРЕДМЕТОВ ====================
-
-  // ==================== ОПРЕДЕЛЕНИЕ МОБИЛЬНОГО УСТРОЙСТВА ====================
-  function createItemEffect(itemType, carMesh) {
-    if (!window.particleSystem || !window.effectsPool) return;
-
-    const position = carMesh.position.clone();
-    position.y += 1;
-    
-    switch (itemType) {
-      case 'boost':
-        // Эффект ускорения - светящиеся частицы
-        for (let i = 0; i < 20; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const distance = 0.5 + Math.random() * 0.5;
-          const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-          window.particleSystem.emitExhaust(
-            position.clone().add(dir.multiplyScalar(distance)),
-            dir,
-            0.5 + Math.random() * 0.5
-          );
-        }
-        break;
-        
-      case 'superboost':
-        // Мощный эффект ускорения
-        for (let i = 0; i < 50; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const distance = 0.5 + Math.random() * 1.0;
-          const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-          window.particleSystem.emitExhaust(
-            position.clone().add(dir.multiplyScalar(distance)),
-            dir,
-            1.0 + Math.random() * 1.0
-          );
-        }
-        // Вспышка через пул эффектов
-        window.effectsPool.createFlash(position, 0xffff00, 0.2, 1.5);
-        break;
-        
-      case 'shield':
-        // Эффект щита - светящееся кольцо
-        window.effectsPool.createRing(position, 0x00ffff, 1.0);
-        break;
-        
-      case 'rocket':
-        // Эффект ракеты - вспышка через пул эффектов
-        window.effectsPool.createFlash(position, 0xff4400, 0.3, 2);
-        break;
-        
-      case 'mine':
-        // Эффект мины - вспышка через пул эффектов
-        window.effectsPool.createFlash(position, 0xff8800, 0.5, 1.2);
-        break;
-        
-      case 'oil':
-        // Эффект масла - облако частиц
-        for (let i = 0; i < 25; i++) {
-          const angle = Math.random() * Math.PI * 2;
-          const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-          window.particleSystem.emitSmoke(
-            position.clone(),
-            dir,
-            5
-          );
-        }
-        break;
-    }
-  }
 
   // Показать мобильные контролы, если это мобильное устройство
   const mobileControls = document.getElementById('mobile-controls');
@@ -344,6 +276,70 @@ function updateCamera() {
   camLookAt.copy(window.car.mesh.position);
   camLookAt.y += 1;
   camera.lookAt(camLookAt);
+}
+
+// ==================== ВИЗУАЛЬНЫЕ ЭФФЕКТЫ ПРИ ИСПОЛЬЗОВАНИИ ПРЕДМЕТОВ ====================
+function createItemEffect(itemType, position) {
+  if (!window.particleSystem || !window.effectsPool) return;
+
+  const pos = position.clone();
+  pos.y += 1;
+  
+  switch (itemType) {
+    case 'boost':
+      for (let i = 0; i < 20; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 0.5 + Math.random() * 0.5;
+        const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+        window.particleSystem.emitExhaust(
+          pos.clone().add(dir.multiplyScalar(distance)),
+          dir,
+          0.5 + Math.random() * 0.5
+        );
+      }
+      break;
+      
+    case 'superboost':
+      for (let i = 0; i < 50; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 0.5 + Math.random() * 1.0;
+        const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+        window.particleSystem.emitExhaust(
+          pos.clone().add(dir.multiplyScalar(distance)),
+          dir,
+          1.0 + Math.random() * 1.0
+        );
+      }
+      window.effectsPool.createFlash(pos, 0xffff00, 0.2, 1.5);
+      break;
+      
+    case 'shield':
+      window.effectsPool.createRing(pos, 0x00ffff, 1.0);
+      break;
+      
+    case 'rocket':
+      window.effectsPool.createFlash(pos, 0xff4400, 0.3, 2);
+      break;
+      
+    case 'mine':
+      window.effectsPool.createFlash(pos, 0xff8800, 0.5, 1.2);
+      break;
+      
+    case 'oil':
+      for (let i = 0; i < 25; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dir = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+        window.particleSystem.emitSmoke(pos.clone(), dir, 5);
+      }
+      break;
+
+    case 'jump':
+    case 'loop':
+    case 'tunnel':
+      // Простой эффект для элементов трассы
+      window.effectsPool.createFlash(pos, 0x00ff88, 0.2, 1);
+      break;
+  }
 }
 
 // ==================== ПЕРЕВОРОТ МАШИНЫ ====================
@@ -510,15 +506,48 @@ menuBtn.addEventListener('touchstart', (e) => {
 });
 
 // ==================== ГЛАВНЫЙ ЦИКЛ ====================
+// Разделяем логику на обязательную (каждый кадр) и фоновую (не каждый кадр)
+// чтобы избежать Violation: handler took 155ms
 
 const clock = new THREE.Clock();
+let _frameCount = 0;
+
+// Колл-бэки для коллизий (создаём один раз, не засоряем стек)
+function onMineHitPlayer() {
+  window.car.flipOver();
+  window.car.chassisBody.velocity.set(0, 0, 0);
+  window.car.chassisBody.angularVelocity.set(0, 0, 0);
+}
+function onMineHitBot(bot) {
+  return () => {
+    bot.controller.flipOver();
+    bot.controller.chassisBody.velocity.set(0, 0, 0);
+    bot.controller.chassisBody.angularVelocity.set(0, 0, 0);
+  };
+}
+function onOilHitPlayer(oil) {
+  window.car.oilSlick(3000);
+}
+function onOilHitBot(bot) {
+  return (oil) => {
+    bot.controller.oilSlick(3000);
+  };
+}
+function onBallHitPlayer() {
+  console.log('Ball hit player!');
+}
+function onBallHitBot() {
+  console.log('Ball hit bot!');
+}
 
 function animate() {
   requestAnimationFrame(animate);
 
   const dt = Math.min(clock.getDelta(), 0.05);
+  _frameCount++;
 
   if (window.state.isPlaying && window.car && window.botManager && window.hud) {
+    // === КАЖДЫЙ КАДР (обязательно) ===
     try {
       world.step(1 / 60, dt, CONFIG.physics.substeps);
     } catch (err) {
@@ -537,99 +566,79 @@ function animate() {
       console.error('BotManager update error:', err.message);
     }
 
-    // Проверка столкновений ботов с минами и маслом
-    if (window.itemSystem) {
-      for (const bot of window.botManager.bots) {
-        const botPos = bot.controller.chassisBody.position;
-        window.itemSystem.checkMineCollisions(bot.controller, () => {  // Pass bot controller instead of position
-          // Бот попал на мину - переворачиваем
-          bot.controller.flipOver();
-          // Сбрасываем скорость
-          bot.controller.chassisBody.velocity.set(0, 0, 0);
-          bot.controller.chassisBody.angularVelocity.set(0, 0, 0);
-        });
-        window.itemSystem.checkOilCollisions(bot.controller, (oil) => {
-          // Бот наехал на масло - теряет управление на 1 секунду
-          bot.controller.stun(1000);
-        });
-        window.itemSystem.checkBallCollisions(bot.controller, () => {
-          // Бот столкнулся с шаром - скорость сброшена
-          console.log('Ball hit bot!');
-        });
-      }
-    }
     updateCamera();
     window.hud.update(window.car, window.state, window.lapCounter);
 
-    // Обновляем систему частиц
+    // === Проверка выхода за границы карты (каждый кадр) ===
+    const carPos = window.car.mesh.position;
+    const teleportRadius = 120; // чуть больше половины размера арены (217/2 ≈ 108.5)
+    if (carPos.x * carPos.x + carPos.z * carPos.z > teleportRadius * teleportRadius || carPos.y < -20) {
+      // Телепорт обратно в центр
+      window.car.reset(track.spawnPos, track.spawnRot.y);
+      window.car.chassisBody.velocity.set(0, 0, 0);
+      window.car.chassisBody.angularVelocity.set(0, 0, 0);
+      console.log('🔄 Машина вышла за границы карты — телепорт в центр');
+    }
+
+    // === ЧЕРЕЗ КАДР (проверки коллизий) ===
+    if (_frameCount % 2 === 0) {
+      if (window.itemSystem) {
+        // Проверка столкновений ботов (только каждый 2й кадр)
+        for (const bot of window.botManager.bots) {
+          window.itemSystem.checkMineCollisions(bot.controller, onMineHitBot(bot));
+          window.itemSystem.checkOilCollisions(bot.controller, onOilHitBot(bot));
+          window.itemSystem.checkBallCollisions(bot.controller, onBallHitBot);
+        }
+        
+        // Проверка столкновений игрока
+        window.itemSystem.checkMineCollisions(window.car, onMineHitPlayer);
+        window.itemSystem.checkOilCollisions(window.car, onOilHitPlayer);
+        window.itemSystem.checkBallCollisions(window.car, onBallHitPlayer);
+      }
+
+      // Проверка столкновений с препятствиями — редко, только рядом с игроком
+      checkObstacleCollisions(window.car.mesh.position);
+      checkSpecialTrackCollisions(window.car.mesh.position.clone(), window.car.chassisBody);
+    }
+
+    // === КАЖДЫЙ КАДР (предметы) ===
+    if (window.itemSystem) {
+      const trackSegments = track && track.segments ? track.segments : [];
+      window.itemSystem.update(dt, trackSegments);
+      window.itemSystem.checkItemCollection(window.car.mesh.position);
+    }
+
+    // === КАЖДЫЙ КАДР (визуал) ===
     particleSystem.update(dt);
 
-    // Эффекты выхлопа и дыма при дрифте
+    // Эффекты выхлопа
     const carSpeed = window.car.speed;
-    const carPos = window.car.mesh.position.clone();
-    carPos.y += 0.5;
+    const exhaustPos = window.car.mesh.position.clone();
+    exhaustPos.y += 0.5;
     
-    // Выхлоп при движении
     if (carSpeed > 10) {
       const exhaustDir = new THREE.Vector3(0, 0.5, -1);
       exhaustDir.applyQuaternion(window.car.mesh.quaternion);
-      particleSystem.emitExhaust(carPos, exhaustDir, carSpeed / 100);
+      particleSystem.emitExhaust(exhaustPos, exhaustDir, carSpeed / 100);
     }
 
-    // Дым при дрифте (боковое скольжение)
     const sidewaysSpeed = window.car.getSidewaysSpeed();
     if (Math.abs(sidewaysSpeed) > 20 && carSpeed > 30) {
       const smokeDir = new THREE.Vector3(0, 0.5, 0);
-      particleSystem.emitSmoke(carPos, smokeDir, 3);
+      particleSystem.emitSmoke(exhaustPos, smokeDir, 3);
     }
 
-    // Проверка столкновений с препятствиями
-    checkObstacleCollisions(window.car.mesh.position);
-
-    // Проверка столкновений со специальными элементами трассы
-    checkSpecialTrackCollisions(carPos, window.car.chassisBody);
-
-    // Обновление счётчика кругов
+    // LapCounter каждый кадр
     if (window.lapCounter) {
       window.lapCounter.update(window.car.mesh.position);
-      
-      // Передаём следующую контрольную точку для стрелки направления
       window.car.mesh.userData.nextCheckpoint = window.lapCounter.getNextCheckpoint();
     }
 
-    // Обновление системы предметов
-    if (window.itemSystem) {
-      // Ensure track.segments exists before passing it to itemSystem.update
-      const trackSegments = track && track.segments ? track.segments : [];
-      window.itemSystem.update(dt, trackSegments);
-      // Проверка сбора предметов
-      window.itemSystem.checkItemCollection(window.car.mesh.position);
-      // Проверка столкновений с минами
-      window.itemSystem.checkMineCollisions(window.car, () => {  // Pass car object instead of position
-        // Игрок попал на мину - переворачиваем машину
-        window.car.flipOver();
-        // Сбрасываем скорость
-        window.car.chassisBody.velocity.set(0, 0, 0);
-        window.car.chassisBody.angularVelocity.set(0, 0, 0);
-      });
-      // Проверка столкновений с масляными пятнами
-      window.itemSystem.checkOilCollisions(window.car, (oil) => {
-        // Игрок наехал на масло - теряет управление на 1 секунду
-        window.car.stun(1000);
-      });
-      // Проверка столкновений с шарами
-      window.itemSystem.checkBallCollisions(window.car, () => {
-        // Игрок столкнулся с шаром - скорость сброшена
-        console.log('Ball hit player!');
-      });
-    }
-
-    // Обновляем пул эффектов
-    if (window.effectsPool) {
+    // EffectsPool каждый 2й кадр
+    if (window.effectsPool && _frameCount % 2 === 0) {
       window.effectsPool.update(dt);
     }
 
-    // Показываем кнопку переворота, если машина вверх дном
     flipBtn.style.display = window.car.isFlipped() ? 'block' : 'none';
   }
 

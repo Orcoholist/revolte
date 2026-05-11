@@ -65,12 +65,42 @@ function createConcreteTexture() {
 
 function createGrassTexture() {
   return makeCanvasTexture((ctx, w, h) => {
-    ctx.fillStyle = '#3d6b2e';
+    // Базовый цвет — более живой
+    const grad = ctx.createRadialGradient(w/2, h/2, 0, w/2, h/2, w/1.5);
+    grad.addColorStop(0, '#4a8c2e');
+    grad.addColorStop(0.5, '#3d7a25');
+    grad.addColorStop(1, '#2d5f1a');
+    ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
-    for (let i = 0; i < 5000; i++) {
-      const g = 80 + Math.random() * 80;
-      ctx.fillStyle = Math.random() > 0.5 ? `rgb(30,${g},20)` : `rgb(40,${g},30)`;
-      ctx.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 3, 1 + Math.random() * 3);
+    
+    // Мелкая текстурная трава — травинки
+    for (let i = 0; i < 12000; i++) {
+      const x = Math.random() * w;
+      const y = Math.random() * h;
+      const g = 100 + Math.random() * 100;
+      const r = 25 + Math.random() * 35;
+      ctx.fillStyle = `rgb(${r},${g},${20 + Math.random() * 25})`;
+      ctx.fillRect(x, y, 1 + Math.random() * 2, 2 + Math.random() * 5);
+    }
+    
+    // Более тёмные пятна для разнообразия
+    for (let i = 0; i < 500; i++) {
+      const x = Math.random() * w;
+      const y = Math.random() * h;
+      ctx.fillStyle = `rgba(20,50,10,${0.1 + Math.random() * 0.3})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 4 + Math.random() * 12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    // Светлые прожилки-просветы
+    for (let i = 0; i < 300; i++) {
+      const x = Math.random() * w;
+      const y = Math.random() * h;
+      ctx.fillStyle = `rgba(120,180,80,${0.05 + Math.random() * 0.15})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 3 + Math.random() * 8, 0, Math.PI * 2);
+      ctx.fill();
     }
   });
 }
@@ -380,7 +410,9 @@ function addLampPost(scene, x, y, z) {
   const group = new THREE.Group(); group.position.set(x, y, z);
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.22, 6, 8), M.metalDark);
   pole.position.y = 3; pole.castShadow = true; group.add(pole);
-  group.add(new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), M.lightGlow)).position.y = 6;
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), M.lightGlow);
+  glow.position.y = 6;
+  group.add(glow);
   scene.add(group);
 }
 
@@ -496,7 +528,7 @@ function addRampPlatform(scene, world, x, y, z, w, d, rotY, height, mat) {
 // Стены по периметру арены
 function addWalls(scene, world, size) {
   const half = size / 2;
-  const wallHeight = 5;
+  const wallHeight = 30;
   const wallThickness = 1;
   const wallMat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.7, transparent: true, opacity: 0.25 });
   
@@ -530,14 +562,34 @@ export function createTrack(scene, world) {
 
   console.log('🏟️  Строим расширенную арену...');
 
-  // 1. Основная площадка — уменьшаем до 200x200
-  const arenaSize = 200;
-  const arenaGeo = new THREE.PlaneGeometry(arenaSize, arenaSize);
-  const arenaMat = new THREE.MeshStandardMaterial({ map: grassTex, roughness: 0.95 });
-  arenaMat.map.repeat.set(3, 3);
-  const arena = new THREE.Mesh(arenaGeo, arenaMat);
-  arena.rotation.x = -Math.PI / 2; arena.position.y = -0.05; arena.receiveShadow = true;
-  scene.add(arena);
+  // 1. Основная площадка — 4 асфальтовые зоны (217×217)
+  const arenaSize = 217;
+  const half = arenaSize / 2;
+  const asphaltTex1 = createConcreteTexture();
+  const asphaltTex2 = createAsphaltTexture(); 
+  // Зоны: асфальт + бетон вместо травы
+  const zones = [
+    { mat: new THREE.MeshStandardMaterial({ map: asphaltTex1, roughness: 0.7, color: 0xcccccc }), ox: -half/2, oz: -half/2 }, // NW
+    { mat: new THREE.MeshStandardMaterial({ map: asphaltTex2, roughness: 0.75, color: 0x888888 }), ox: half/2, oz: -half/2 }, // NE
+    { mat: new THREE.MeshStandardMaterial({ map: asphaltTex1, roughness: 0.7, color: 0xaaaaaa }), ox: -half/2, oz: half/2 }, // SW
+    { mat: new THREE.MeshStandardMaterial({ map: asphaltTex2, roughness: 0.75, color: 0x777777 }), ox: half/2, oz: half/2 }, // SE
+  ];
+  for (const zone of zones) {
+    const zGeo = new THREE.PlaneGeometry(half, half);
+    const zMesh = new THREE.Mesh(zGeo, zone.mat);
+    zMesh.rotation.x = -Math.PI / 2;
+    zMesh.position.set(zone.ox, -0.05, zone.oz);
+    zMesh.receiveShadow = true;
+    scene.add(zMesh);
+  }
+  // Разделительные линии между зонами
+  const dividerMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.4 });
+  for (const axis of ['x', 'z']) {
+    const div = new THREE.Mesh(new THREE.PlaneGeometry(axis === 'x' ? arenaSize : 0.3, axis === 'z' ? arenaSize : 0.3), dividerMat);
+    div.rotation.x = -Math.PI / 2;
+    div.position.set(0, 0.01, 0);
+    scene.add(div);
+  }
 
   // Физический слой для поля
   const arenaBody = new CANNON.Body({ mass: 0, material: physGround });
@@ -545,86 +597,195 @@ export function createTrack(scene, world) {
   arenaBody.position.set(0, 0, 0);
   world.addBody(arenaBody);
 
+  // === ТРАВЯНЫЕ ОСТРОВКИ (ковровый стиль) ===
+  // Аккуратные, эстетичные, игрушечные — как на детском ковре с дорожками
+
+  // Три оттенка зелёного для разнообразия
+  const grassColors = [
+    new THREE.Color().setHSL(0.28, 0.6, 0.35), // травяной
+    new THREE.Color().setHSL(0.32, 0.55, 0.3), // тёмно-зелёный
+    new THREE.Color().setHSL(0.25, 0.65, 0.4), // светло-зелёный
+  ];
+
+  // Материал для "бортика" (толщина островка)
+  const sideMat = new THREE.MeshStandardMaterial({ 
+    color: 0x3a7a25, 
+    roughness: 0.8 
+  });
+
+  function createGrassIslandCute(scene, cx, cz, radiusX, radiusZ, color, rotationY = 0) {
+    // Эллиптическая форма с плавным краем
+    const shape = new THREE.Shape();
+    const segments = 24; // сглаженный круг
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      const x = Math.cos(angle) * radiusX;
+      const y = Math.sin(angle) * radiusZ;
+      if (i === 0) shape.moveTo(x, y);
+      else shape.lineTo(x, y);
+    }
+    
+    // Верхняя плоскость с текстурой
+    const topMat = new THREE.MeshStandardMaterial({ 
+      map: grassTex, 
+      roughness: 0.9,
+      color: color,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2
+    });
+    
+    const geo = new THREE.ShapeGeometry(shape);
+    const top = new THREE.Mesh(geo, topMat);
+    top.rotation.x = -Math.PI / 2;
+    top.position.set(cx, 0.04, cz);
+    top.rotation.y = rotationY;
+    top.receiveShadow = true;
+    top.castShadow = true;
+    scene.add(top);
+    
+    // Толщина (бортик) — придаёт объём как на детском коврике
+    const sideGeo = new THREE.ShapeGeometry(shape);
+    const sideMesh = new THREE.Mesh(sideGeo, sideMat);
+    sideMesh.rotation.x = -Math.PI / 2;
+    sideMesh.position.set(cx, -0.06, cz);
+    sideMesh.rotation.y = rotationY;
+    sideMesh.receiveShadow = true;
+    scene.add(sideMesh);
+    
+    return top;
+  }
+
+  // Размещаем островки по краям арены в виде аккуратных газонов
+  // В центре — дорожная сеть, по краям — островки между дорогами и стенами
+  const islandDefs = [
+    // Большие островки по углам арены (эллиптические)
+    { x: -68, z: -68, rx: 14, rz: 10, color: 0 },
+    { x: 68, z: -68, rx: 14, rz: 10, color: 1 },
+    { x: -68, z: 68, rx: 14, rz: 10, color: 2 },
+    { x: 68, z: 68, rx: 14, rz: 10, color: 0 },
+    
+    // Вдоль северного края
+    { x: -40, z: -82, rx: 12, rz: 7, color: 1, rot: 0.2 },
+    { x: 0, z: -85, rx: 14, rz: 7, color: 2 },
+    { x: 40, z: -82, rx: 12, rz: 7, color: 0, rot: -0.2 },
+    
+    // Вдоль южного края
+    { x: -40, z: 82, rx: 12, rz: 7, color: 2, rot: -0.2 },
+    { x: 0, z: 85, rx: 14, rz: 7, color: 0 },
+    { x: 40, z: 82, rx: 12, rz: 7, color: 1, rot: 0.2 },
+    
+    // Вдоль западного края
+    { x: -82, z: -40, rx: 7, rz: 12, color: 0, rot: 0.3 },
+    { x: -85, z: 0, rx: 7, rz: 14, color: 1 },
+    { x: -82, z: 40, rx: 7, rz: 12, color: 2, rot: -0.3 },
+    
+    // Вдоль восточного края
+    { x: 82, z: -40, rx: 7, rz: 12, color: 1, rot: -0.3 },
+    { x: 85, z: 0, rx: 7, rz: 14, color: 2 },
+    { x: 82, z: 40, rx: 7, rz: 12, color: 0, rot: 0.3 },
+    
+    // Маленькие округлые островки между крупными
+    { x: -55, z: -55, rx: 5, rz: 4, color: 2, rot: 0.5 },
+    { x: 55, z: -55, rx: 5, rz: 4, color: 0, rot: -0.4 },
+    { x: -55, z: 55, rx: 5, rz: 4, color: 1, rot: 0.6 },
+    { x: 55, z: 55, rx: 5, rz: 4, color: 0, rot: 0.3 },
+    
+    // Островки между дорожными лучами (внутренняя зона)
+    { x: -30, z: -55, rx: 4, rz: 5, color: 1, rot: 0.8 },
+    { x: 30, z: -55, rx: 4, rz: 5, color: 2, rot: -0.7 },
+    { x: -30, z: 55, rx: 4, rz: 5, color: 0, rot: 0.9 },
+    { x: 30, z: 55, rx: 4, rz: 5, color: 1, rot: -0.5 },
+    { x: -55, z: -30, rx: 5, rz: 4, color: 2, rot: 0.4 },
+    { x: 55, z: -30, rx: 5, rz: 4, color: 0, rot: -0.6 },
+    { x: -55, z: 30, rx: 5, rz: 4, color: 1, rot: 0.7 },
+    { x: 55, z: 30, rx: 5, rz: 4, color: 0, rot: -0.3 },
+  ];
+
+  for (const def of islandDefs) {
+    const color = grassColors[def.color % grassColors.length];
+    createGrassIslandCute(scene, def.x, def.z, def.rx, def.rz, color, def.rot || 0);
+  }
+
   // Стены по периметру
   addWalls(scene, world, arenaSize);
 
-  // 2. Дорожная сеть — расширенная
+  // 2. Дорожная сеть
   const outerRing = [
-    new THREE.Vector3(-30, 0, -30), new THREE.Vector3(30, 0, -30),
-    new THREE.Vector3(30, 0, 30), new THREE.Vector3(-30, 0, 30), new THREE.Vector3(-30, 0, -30),
+    new THREE.Vector3(-21.7, 0, -21.7), new THREE.Vector3(21.7, 0, -21.7),
+    new THREE.Vector3(21.7, 0, 21.7), new THREE.Vector3(-21.7, 0, 21.7), new THREE.Vector3(-21.7, 0, -21.7),
   ];
   addRoad(scene, outerRing, W, world, 0.01);
   
   const innerCircle = [];
-  for (let i = 0; i <= 64; i++) { const a = (i / 64) * Math.PI * 2; innerCircle.push(new THREE.Vector3(Math.cos(a) * 30, 0, Math.sin(a) * 30)); }
+  for (let i = 0; i <= 64; i++) { const a = (i / 64) * Math.PI * 2; innerCircle.push(new THREE.Vector3(Math.cos(a) * 21.7, 0, Math.sin(a) * 21.7)); }
   addRoad(scene, innerCircle, W, world, 0.015);
   
-  addRoad(scene, [new THREE.Vector3(-30, 0, -30), new THREE.Vector3(0, 0, 0), new THREE.Vector3(30, 0, 30)], W * 0.8, world, 0.02);
-  addRoad(scene, [new THREE.Vector3(30, 0, -30), new THREE.Vector3(0, 0, 0), new THREE.Vector3(-30, 0, 30)], W * 0.8, world, 0.025);
+  addRoad(scene, [new THREE.Vector3(-21.7, 0, -21.7), new THREE.Vector3(0, 0, 0), new THREE.Vector3(21.7, 0, 21.7)], W * 0.8, world, 0.02);
+  addRoad(scene, [new THREE.Vector3(21.7, 0, -21.7), new THREE.Vector3(0, 0, 0), new THREE.Vector3(-21.7, 0, 21.7)], W * 0.8, world, 0.025);
   
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
-    addRoad(scene, [new THREE.Vector3(0, 0, 0), new THREE.Vector3(Math.cos(a) * 40, 0, Math.sin(a) * 40)], W * 0.6, world, 0.03 + i * 0.001);
+    addRoad(scene, [new THREE.Vector3(0, 0, 0), new THREE.Vector3(Math.cos(a) * 28.9, 0, Math.sin(a) * 28.9)], W * 0.6, world, 0.03 + i * 0.001);
   }
 
   // Разметка на внешнем кольце
   const outerRingMarkings = [
-    new THREE.Vector3(-115, 0, -115), 
-    new THREE.Vector3(115, 0, -115), 
-    new THREE.Vector3(115, 0, 115), 
-    new THREE.Vector3(-115, 0, 115), 
-    new THREE.Vector3(-115, 0, -115)
+    new THREE.Vector3(-83.1, 0, -83.1), 
+    new THREE.Vector3(83.1, 0, -83.1), 
+    new THREE.Vector3(83.1, 0, 83.1), 
+    new THREE.Vector3(-83.1, 0, 83.1), 
+    new THREE.Vector3(-83.1, 0, -83.1)
   ];
   addRoadMarkings(scene, outerRingMarkings, 1.2);
 
   // Разметка на внутреннем кольце
   const innerMarkings = [];
-  for (let i = 0; i <= 40; i++) { const a = (i / 40) * Math.PI * 2; innerMarkings.push(new THREE.Vector3(Math.cos(a) * 75, 0, Math.sin(a) * 75)); }
+  for (let i = 0; i <= 40; i++) { const a = (i / 40) * Math.PI * 2; innerMarkings.push(new THREE.Vector3(Math.cos(a) * 54.2, 0, Math.sin(a) * 54.2)); }
   addRoadMarkings(scene, innerMarkings, 1.0);
-  for (let i = 0; i < 10; i++) {
-    const gx = (Math.random() - 0.5) * 80, gz = (Math.random() - 0.5) * 80;
-    if (Math.abs(gx) < 20 && Math.abs(gz) < 20) continue;
-    const gp = new THREE.Mesh(new THREE.PlaneGeometry(6 + Math.random() * 4, 4 + Math.random() * 3), M.gravel);
+  for (let i = 0; i < 6; i++) {
+    const gx = (Math.random() - 0.5) * 57.8, gz = (Math.random() - 0.5) * 57.8;
+    if (Math.abs(gx) < 17 && Math.abs(gz) < 17) continue;
+    const gp = new THREE.Mesh(new THREE.PlaneGeometry(4 + Math.random() * 3, 3 + Math.random() * 2), M.gravel);
     gp.rotation.x = -Math.PI / 2; gp.position.set(gx, 0.005, gz); gp.receiveShadow = true; scene.add(gp);
   }
 
   // 4. Петли
-  addLoop(scene, world, -30, 0, 45, 3, 0, elements);
-  addLoop(scene, world, 30, 0, -45, 3, Math.PI, elements);
+  addLoop(scene, world, -21.7, 0, 32.5, 3, 0, elements);
+  addLoop(scene, world, 21.7, 0, -32.5, 3, Math.PI, elements);
 
-    // 6. Декорации (деревья и трибуны удалены)
-    // addGrandstand(scene, world, -35, 0, 35, 0);
-    // addGrandstand(scene, world, 35, 0, 35, Math.PI);
-    
-    for (let i = 0; i < 24; i++) { const a = (i / 24) * Math.PI * 2; addLampPost(scene, Math.cos(a) * 50, 0, Math.sin(a) * 50); }
-    // for (let i = 0; i < 80; i++) { const a = Math.random() * Math.PI * 2, d = 50 + Math.random() * 20; addTree(scene, Math.cos(a) * d, 0, Math.sin(a) * d); }
+    for (let i = 0; i < 20; i++) { const a = (i / 20) * Math.PI * 2; addLampPost(scene, Math.cos(a) * 36.1, 0, Math.sin(a) * 36.1); }
   
-  // Переместим "горы" (billboard) дальше от центра, чтобы не закрывали чекпоинты
-  // Увеличиваем радиус расположения с 30-70 до 45-105
-  // Переместим "горы" (billboard) ещё дальше от центра, чтобы они не закрывали чекпоинты
-  // Увеличиваем радиус до ~150 м
-  // Увеличим радиус расположения гор до ~200 м, чтобы они точно не закрывали чекпоинты
-  // Увеличим радиус до ~300 м, чтобы горы полностью не мешали чекпоинтам
-  // Увеличим радиус до ~400 м, чтобы горы полностью не мешали чекпоинтам
-  const bb = [
-    [-160, 0, 320], [160, 0, 320],
-    [-320, 0, 160], [320, 0, -160],
-    [-320, 0, -160], [320, 0, 160],
-    [0, 0, 400], [0, 0, -400]
-  ];
-  for (const [bx, by, bz] of bb) addBillboard(scene, bx, by, bz);
-  addStartArch(scene, 0, 0, -85, Math.PI);
+  addStartArch(scene, 0, 0, -61.4, Math.PI);
 
   // 7. Сегменты для lapCounter
   const trackPoints = [];
-  // Уменьшаем радиус чекпоинтов, чтобы они не попадали в деревья
   for (let i = 0; i < 40; i++) {
     const a = (i / 40) * Math.PI * 2;
-    // Теперь 15 для ещё более компактного поля чекпоинтов
-    trackPoints.push(new THREE.Vector3(Math.cos(a) * 15, 0, Math.sin(a) * 15));
+    trackPoints.push(new THREE.Vector3(Math.cos(a) * 10.8, 0, Math.sin(a) * 10.8));
   }
 
-  console.log('✅ Расширенная арена готова!');
-  // Задаём стартовую позицию в центре маленькой арены
-  return { segments: trackPoints, spawnPos: new THREE.Vector3(0, 0.5, -15), spawnRot: { y: Math.PI }, obstacles, elements };
+  console.log('✅ Компактная 4-зонная арена готова!');
+
+  // Создаём точки спавна по кругу для всех машин (игрок + боты)
+  const totalCars = 8; // 1 игрок + 7 ботов
+  const spawnRadius = 60; // ближе к центру, чтобы не застревать в стенах
+  const spawnPoints = [];
+  for (let i = 0; i < totalCars; i++) {
+    const angle = (i / totalCars) * Math.PI * 2;
+    spawnPoints.push({
+      position: new THREE.Vector3(Math.cos(angle) * spawnRadius, 0.5, Math.sin(angle) * spawnRadius),
+      rotation: angle + Math.PI // смотрит лицом к центру
+    });
+  }
+
+  // Первая точка — для игрока
+  return { 
+    segments: trackPoints, 
+    spawnPos: spawnPoints[0].position, 
+    spawnRot: { y: spawnPoints[0].rotation }, 
+    spawnPoints, // массив всех точек спавна
+    obstacles, 
+    elements 
+  };
 }

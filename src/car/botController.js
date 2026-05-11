@@ -4,7 +4,6 @@ import { CONFIG } from '../engine/config.js';
 
 /**
  * AI-контроллер бота: автоматически ездит по waypoints трассы.
- * БОТЫ ЕДУТ НА МАКСИМАЛЬНОЙ СКОРОСТИ К СВОИМ ТОЧКАМ ИНТЕРЕСА!
  */
 export class BotController {
   constructor(chassisBody, vehicle, carMesh, wheelMeshes, checkpoints, startCheckpoint = 0, botIndex = 0) {
@@ -13,49 +12,73 @@ export class BotController {
     this.mesh = carMesh;
     this.wheelMeshes = wheelMeshes;
 
-    // Чекпоинты уже созданы в BotManager с уникальным маршрутом для каждого бота
     this.checkpoints = checkpoints;
     this.botIndex = botIndex;
     this.currentCheckpoint = startCheckpoint % this.checkpoints.length;
     this.lap = 0;
     this.speed = 0;
 
-    // МАКСИМАЛЬНАЯ СКОРОСТЬ - боты едут на пределе!
-    this.maxSpeed = CONFIG.car.maxSpeed * 1.5; // 1.5x - очень быстро!
-    // Быстрый руль для агрессивного вождения
+    this.maxSpeed = CONFIG.car.maxSpeed * 1.5;
     this.steerSmoothness = 0.15;
     this.currentSteer = 0;
 
     this.stuckTimer = 0;
     this.lastPos = new THREE.Vector3();
-    // Меньший порог - боты точнее следуют маршруту
     this.checkpointThreshold = 6;
     this._debugTimer = 0;
 
-    // Высокая агрессия - боты едут на пределе возможностей
-    this.aggression = 1.3 + (botIndex % 3) * 0.2; // 1.3 .. 1.7
+    this.aggression = 1.3 + (botIndex % 3) * 0.2;
+
+    // Состояние оглушения (через dt, без Date.now)
+    this.isStunned = false;
+    this.stunDuration = 0;
+
+    // Состояние буста (через dt, без setTimeout)
+    this._boostMultiplier = 1.0;
+    this._boostDuration = 0;
+
+    // Использование предметов
+    this.itemUsageTimer = 0;
+    // Кэшируем ссылку на botObj (чтобы не делать find() каждый кадр)
+    this._botObj = null;
   }
 
   /**
-   * Главный update — AI принимает решения и управляет машиной.
-   * БОТЫ ЕДУТ НА МАКСИМАЛЬНОЙ SКОРОСТИ!
+   * Получить объект бота из BotManager (с кэшированием)
    */
+  _getBotObj() {
+    if (this._botObj) return this._botObj;
+    if (!window.botManager || !window.botManager.bots) return null;
+    this._botObj = window.botManager.bots.find(b => b.controller === this);
+    return this._botObj;
+  }
+
   update(dt) {
     const pos = this.chassisBody.position;
     const cfg = CONFIG.car;
 
-    // Защита от пустых чекпоинтов
     if (!this.checkpoints || this.checkpoints.length === 0) {
-      console.warn(`Bot ${this.botIndex}: нет чекпоинтов!`);
       return;
     }
 
-    // Проверка оглушения (масло)
-    if (this.isStunned && Date.now() > this.stunEndTime) {
-      this.isStunned = false;
-    }
+    // Обновляем состояния через dt (без Date.now)
     if (this.isStunned) {
-      // Отключаем двигатель, машина катится
+      this.stunDuration -= dt;
+      if (this.stunDuration <= 0) {
+        this.isStunned = false;
+        this.stunDuration = 0;
+      }
+    }
+
+    if (this._boostDuration > 0) {
+      this._boostDuration -= dt;
+      if (this._boostDuration <= 0) {
+        this._boostMultiplier = 1.0;
+        this._boostDuration = 0;
+      }
+    }
+
+    if (this.isStunned) {
       this.vehicle.applyEngineForce(0, 2);
       this.vehicle.applyEngineForce(0, 3);
       this.vehicle.setBrake(0, 0);
@@ -63,7 +86,6 @@ export class BotController {
       this.vehicle.setBrake(0, 2);
       this.vehicle.setBrake(0, 3);
       
-      // Синхронизация визуала
       this.mesh.position.copy(this.chassisBody.position);
       this.mesh.quaternion.copy(this.chassisBody.quaternion);
       if (this.wheelMeshes && this.wheelMeshes.length > 0) {
@@ -79,14 +101,9 @@ export class BotController {
       return;
     }
 
-    // --- 1. Цель — ТЕКУЩИЙ чекпоинт (к которому едем) ---
     const target = this.checkpoints[this.currentCheckpoint];
 
-    // --- 2. Проверяем прохождение текущего чекпоинта ---
-    // Считаем расстояние только по X и Z (игнорируем Y - боты едут по трассе)
     const distToCp = Math.sqrt((target.x - pos.x) ** 2 + (target.z - pos.z) ** 2);
-
-    // Фиксированный порог для надёжного срабатывания (не зависит от скорости)
     const checkpointThreshold = 20;
     if (distToCp < checkpointThreshold) {
       this.currentCheckpoint++;
@@ -96,13 +113,9 @@ export class BotController {
       }
     }
 
-    // --- 3. Направление к цели ---
     const toTarget = new THREE.Vector3(target.x - pos.x, 0, target.z - pos.z);
-    const distToTarget = toTarget.length();
     toTarget.normalize();
 
-    // --- 5. Угол поворота ---
-    // ВАЖНО: для модели Subaru вперёд — это (0, 0, -1), а не (0, 0, 1)
     const forward = new THREE.Vector3(0, 0, -1);
     forward.applyQuaternion(this.mesh.quaternion);
     forward.y = 0;
@@ -111,74 +124,61 @@ export class BotController {
     const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
     const angle = Math.atan2(toTarget.dot(right), toTarget.dot(forward));
 
-    // --- 6. Руль — быстрый и агрессивный ---
     let targetSteer = 0;
-    
-    // Более агрессивный руль - боты быстрее реагируют
     const steerFactor = Math.min(Math.abs(angle) / 0.3, 1.0);
     targetSteer = Math.sign(angle) * cfg.maxSteer * steerFactor;
 
-    // Быстрая интерполяция руля
     const steerDelta = targetSteer - this.currentSteer;
     this.currentSteer += steerDelta * this.steerSmoothness;
 
     this.vehicle.setSteeringValue(this.currentSteer, 0);
     this.vehicle.setSteeringValue(this.currentSteer, 1);
 
-    // --- 7. Скорость ---
     const velocity = this.chassisBody.velocity;
     this.speed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z) * 3.6;
 
-    // --- 8. Газ/тормоз — ВСЕГДА ПОЛНЫЙ ГАЗ К ЦЕЛИ! ---
-    // Боты едут на максималке - только минимальное снижение на очень резких поворотах
+    // Применяем множитель буста к силе двигателя
+    const effectiveAggression = this.aggression * this._boostMultiplier;
+
     const sharpTurn = Math.abs(angle) > 1.0;
     const verySharpTurn = Math.abs(angle) > 1.5;
     
     if (verySharpTurn) {
-      // Очень резкий поворот — небольшое снижение (боты всё равно быстрые)
       const gasFactor = 0.8;
-      this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 2);
-      this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 3);
-      // НЕ тормозим - только газ!
+      this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * effectiveAggression, 2);
+      this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * effectiveAggression, 3);
       this.vehicle.setBrake(0, 0);
       this.vehicle.setBrake(0, 1);
       this.vehicle.setBrake(0, 2);
       this.vehicle.setBrake(0, 3);
     } else if (sharpTurn) {
-      // Резкий поворот — небольшое снижение
       const gasFactor = 0.9;
-      this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 2);
-      this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 3);
+      this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * effectiveAggression, 2);
+      this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * effectiveAggression, 3);
       this.vehicle.setBrake(0, 0);
       this.vehicle.setBrake(0, 1);
       this.vehicle.setBrake(0, 2);
       this.vehicle.setBrake(0, 3);
     } else {
-      // ПРЯМАЯ или плавный поворот — ПОЛНЫЙ ГАЗ НА МАКСИМУМ!
-      const gasFactor = 1.2; // Даже больше максимума!
-      const engineForce = cfg.engineForce * gasFactor * this.aggression;
+      const gasFactor = 1.2;
+      const engineForce = cfg.engineForce * gasFactor * effectiveAggression;
       this.vehicle.applyEngineForce(engineForce, 2);
       this.vehicle.applyEngineForce(engineForce, 3);
-
       this.vehicle.setBrake(0, 0);
       this.vehicle.setBrake(0, 1);
       this.vehicle.setBrake(0, 2);
       this.vehicle.setBrake(0, 3);
     }
 
-    // --- 8. Проверка на застревание ---
+    // Проверка на застревание
     const posDelta = new THREE.Vector3().subVectors(pos, this.lastPos);
     const moveDistance = posDelta.length();
     this.lastPos.copy(pos);
 
-    // Улучшенная проверка застревания: если бот почти не двигается и скорость низкая
     if (moveDistance < 1.0 && this.speed < 10) {
-      // Бот застрял — пробуем выехать
       this.stuckTimer += dt;
       if (this.stuckTimer > 1.0) {
-        // Пытаемся дать газ вперед и назад
         if (Math.random() > 0.5) {
-          // Вперед
           this.vehicle.applyEngineForce(cfg.engineForce * this.aggression, 2);
           this.vehicle.applyEngineForce(cfg.engineForce * this.aggression, 3);
           this.vehicle.setBrake(0, 0);
@@ -186,16 +186,13 @@ export class BotController {
           this.vehicle.setBrake(0, 2);
           this.vehicle.setBrake(0, 3);
         } else {
-          // Назад
           this.vehicle.applyEngineForce(-cfg.reverseForce * 0.8, 2);
           this.vehicle.applyEngineForce(-cfg.reverseForce * 0.8, 3);
         }
         
         if (this.stuckTimer > 2.5) {
-          // СИЛЬНЫЙ толчок в направлении движения + случайный поворот
           const forward = new THREE.Vector3(0, 0, -1);
           forward.applyQuaternion(this.mesh.quaternion);
-          // Импульс вперед
           this.chassisBody.applyImpulse(
             new CANNON.Vec3(
               forward.x * 200 + (Math.random() - 0.5) * 50,
@@ -204,7 +201,6 @@ export class BotController {
             ),
             this.chassisBody.position
           );
-          // Сброс таймера
           this.stuckTimer = 0;
         }
       }
@@ -212,18 +208,15 @@ export class BotController {
       this.stuckTimer = 0;
     }
 
-    // --- 9. Стабилизация ---
     this.chassisBody.angularVelocity.x *= 0.95;
     this.chassisBody.angularVelocity.z *= 0.95;
 
-    // --- 10. Переворот если вверх дном ---
     const up = new THREE.Vector3(0, 1, 0);
     up.applyQuaternion(this.mesh.quaternion);
     if (up.y < 0.2) {
       this._flipOver();
     }
 
-    // --- 11. Визуал ---
     this.mesh.position.copy(this.chassisBody.position);
     this.mesh.quaternion.copy(this.chassisBody.quaternion);
 
@@ -236,83 +229,50 @@ export class BotController {
       }
     }
 
-    // --- Отладка ---
     this._debugTimer += dt;
     if (this._debugTimer > 2) {
       this._debugTimer = 0;
-      const target = this.checkpoints[this.currentCheckpoint];
     }
     
-    // --- 12. Использование предметов ---
     this._handleItemUsage(dt);
   }
 
-  /**
-   * Обработка использования предметов ботом
-   */
   _handleItemUsage(dt) {
-    // Увеличиваем таймер
-    if (!this.itemUsageTimer) {
-      this.itemUsageTimer = 0;
-    }
-    
     this.itemUsageTimer += dt;
     
-    // Используем предмет каждые 8-15 секунд (случайное время)
     if (this.itemUsageTimer > (8 + Math.random() * 7)) {
       this._useItemStrategically();
       this.itemUsageTimer = 0;
     }
   }
 
-  /**
-   * Стратегическое использование предметов
-   */
   _useItemStrategically() {
-    // Find a ready item in the bot's inventory
-    if (!window.itemSystem) {
-      return;
-    }
+    if (!window.itemSystem || !window.botManager || !window.botManager.bots) return;
 
-    // Get the bot object from the bot manager to access its items
-    if (!window.botManager || !window.botManager.bots) {
-      return;
-    }
+    // Используем кэшированную ссылку на botObj
+    const botObj = this._getBotObj();
+    if (!botObj || !botObj.items || botObj.items.length === 0) return;
 
-    // Find the current bot in the bots array
-    const botObj = window.botManager.bots.find(b => b.controller === this);
-    if (!botObj || !botObj.items || botObj.items.length === 0) {
-      return;
-    }
-
-    // Find the first ready item (after cooldown)
     const now = Date.now();
     const readyItem = botObj.items.find(item => {
-      if (!item.ready && now - item.time >= 2000) { // 2-second cooldown
+      if (!item.ready && now - item.time >= 2000) {
         item.ready = true;
       }
       return item.ready;
     });
 
-    if (!readyItem) {
-      // No ready items yet, just return
-      return;
-    }
+    if (!readyItem) return;
 
-    // Remove the item from the bot's inventory
     const idx = botObj.items.indexOf(readyItem);
     if (idx !== -1) {
       botObj.items.splice(idx, 1);
     }
 
-    // Apply the item effect to the bot
-    const result = window.itemSystem.applyItemEffectToBot(readyItem.type, this);
-    console.log(`Бот ${this.botIndex}: ${result.message}`);
+    window.itemSystem.applyItemEffectToBot(readyItem.type, this);
   }
 
   _unstuck() {
     const pos = this.chassisBody.position;
-    // Вперёд — (0, 0, -1) для модели Subaru
     const forward = new THREE.Vector3(0, 0, -1);
     forward.applyQuaternion(this.mesh.quaternion);
     pos.x += forward.x * 2;
@@ -331,7 +291,6 @@ export class BotController {
     angVel.set(0, 0, 0);
     const euler = new THREE.Euler().setFromQuaternion(this.mesh.quaternion, 'YXZ');
     this.chassisBody.quaternion.setFromEuler(0, euler.y, 0);
-    // После переворота даем небольшой импульс вперед, чтобы бот не застрял
     const forward = new THREE.Vector3(0, 0, -1);
     forward.applyQuaternion(this.mesh.quaternion);
     this.chassisBody.applyImpulse(
@@ -340,9 +299,6 @@ export class BotController {
     );
   }
 
-  /**
-   * Публичный метод переворота (вызывается извне, например ракетой).
-   */
   flipOver() {
     this._flipOver();
   }
@@ -355,8 +311,10 @@ export class BotController {
     this.currentCheckpoint = startCheckpoint % this.checkpoints.length;
     this.stuckTimer = 0;
     this.speed = 0;
+    this._boostMultiplier = 1.0;
+    this._boostDuration = 0;
+    this._botObj = null; // сброс кэша
     
-    // Применяем начальный импульс чтобы бот не застревал
     const forward = new THREE.Vector3(0, 0, -1);
     forward.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY);
     this.chassisBody.applyImpulse(
@@ -365,75 +323,18 @@ export class BotController {
     );
   }
   
-  /**
-   * Проверяет, есть ли активный щит у машины
-   */
   hasActiveShield() {
-    // Shield lasts for 5 seconds
-    if (this.shieldTime && (Date.now() - this.shieldTime < 5000)) {
-      return true;
-    }
-    return false;
+    return this.shieldTime && (Date.now() - this.shieldTime < 5000);
   }
   
-  /**
-   * Оглушение (масляное пятно) — бот теряет управление на duration мс
-   */
   stun(duration) {
     this.isStunned = true;
-    this.stunEndTime = Date.now() + duration;
-    console.log('🤖 Bot stunned for ' + duration + 'ms');
+    this.stunDuration = duration / 1000; // конвертируем мс в секунды
   }
 
-  /**
-   * Apply boost to the bot
-   */
   applyBoost(multiplier, duration) {
-    const cfg = CONFIG.car;
-    const boostedForce = cfg.engineForce * multiplier * this.aggression;
-    
-    // Store original state to restore later
-    this.originalBoostState = {
-      boostEndTime: Date.now() + duration
-    };
-    
-    // Apply the boost force directly
-    this.vehicle.applyEngineForce(boostedForce, 2);
-    this.vehicle.applyEngineForce(boostedForce, 3);
-    
-    // Clear any previously scheduled restoration
-    if (this.boostTimeoutId) {
-      clearTimeout(this.boostTimeoutId);
-    }
-    
-    // Schedule restoration of original state
-    this.boostTimeoutId = setTimeout(() => {
-      // Restore original engine forces after boost ends
-      if (this.vehicle) {
-        // Resume normal driving behavior after boost
-        const sharpTurn = Math.abs(this.currentSteer) > 1.0;
-        const verySharpTurn = Math.abs(this.currentSteer) > 1.5;
-        
-        if (verySharpTurn) {
-          const gasFactor = 0.8;
-          this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 2);
-          this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 3);
-        } else if (sharpTurn) {
-          const gasFactor = 0.9;
-          this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 2);
-          this.vehicle.applyEngineForce(cfg.engineForce * gasFactor * this.aggression, 3);
-        } else {
-          const gasFactor = 1.2;
-          const engineForce = cfg.engineForce * gasFactor * this.aggression;
-          this.vehicle.applyEngineForce(engineForce, 2);
-          this.vehicle.applyEngineForce(engineForce, 3);
-        }
-      }
-    }, duration);
-    
-    console.log('🤖 Bot Boost applied: ' + multiplier + 'x for ' + duration + 'ms');
+    // Вместо setTimeout используем аккумулятор времени
+    this._boostMultiplier = multiplier;
+    this._boostDuration = duration / 1000; // конвертируем мс в секунды
   }
 }
-
-
-

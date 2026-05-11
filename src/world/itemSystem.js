@@ -36,7 +36,7 @@ const itemNames = {
   [ItemType.SHIELD]: 'Щит',
   [ItemType.BOOST]: 'Ускорение',
   [ItemType.OIL]: 'Масло',
-  [ItemType.SUPERBOOST]: 'Супер-ускорение'
+  [ItemType.SUPERBOOST]: 'Шар'
 };
 
 // Иконки для UI
@@ -46,7 +46,44 @@ const itemIcons = {
   [ItemType.SHIELD]: '🛡️',
   [ItemType.BOOST]: '⚡',
   [ItemType.OIL]: '🛢️',
-  [ItemType.SUPERBOOST]: '🔥'
+  [ItemType.SUPERBOOST]: '🔮'
+};
+
+/**
+ * Кэшированные геометрии и материалы для TrackItem (переиспользуются всеми предметами)
+ */
+const _itemGeometries = {
+  base: new THREE.SphereGeometry(0.7, 12, 12),
+  ring: new THREE.TorusGeometry(0.9, 0.15, 8, 12),
+  core: new THREE.IcosahedronGeometry(0.4, 1),
+  indicator: new THREE.SphereGeometry(0.15, 6, 6)
+};
+
+const _itemMaterials = {
+  base: new THREE.MeshPhongMaterial({
+    color: 0xffffff,
+    emissive: 0x222222,
+    emissiveIntensity: 0.5,
+    shininess: 80,
+    transparent: true,
+    opacity: 0.9
+  }),
+  ring: new THREE.MeshBasicMaterial({
+    color: 0x00ffff,
+    transparent: true,
+    opacity: 0.7
+  }),
+  core: new THREE.MeshPhongMaterial({
+    color: 0x00ffff,
+    emissive: 0x00aaaa,
+    emissiveIntensity: 0.6,
+    shininess: 100
+  }),
+  indicator: new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.9
+  })
 };
 
 /**
@@ -60,87 +97,58 @@ class TrackItem {
     this.scene = scene;
     this.collected = false;
     this.time = Date.now();
+    this._timeAccum = 0;
     
-    // Создаём визуальное представление
+    // Создаём визуальное представление из кэшированных геометрий/материалов
     this.mesh = this._createMesh();
     this.scene.add(this.mesh);
   }
   
   _createMesh() {
-    // Create a uniform appearance for all items so they're indistinguishable until collected
     const group = new THREE.Group();
     
-    // Base sphere that looks the same for all items
-    const baseGeo = new THREE.SphereGeometry(0.7, 16, 16);
-    const baseMat = new THREE.MeshPhongMaterial({
-      color: 0xffffff, // White base color
-      emissive: 0x222222, // Slight glow
-      emissiveIntensity: 0.5,
-      shininess: 80,
-      transparent: true,
-      opacity: 0.9
-    });
-    const base = new THREE.Mesh(baseGeo, baseMat);
+    // Клонируем материалы, чтобы анимация сбора не влияла на другие предметы
+    const cloneMat = (mat) => mat.clone();
+    
+    // Base sphere
+    const base = new THREE.Mesh(_itemGeometries.base, cloneMat(_itemMaterials.base));
     base.castShadow = true;
     base.receiveShadow = true;
     group.add(base);
     
-    // Rotating ring element
-    const ringGeo = new THREE.TorusGeometry(0.9, 0.15, 8, 16);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0x00ffff, // Cyan color that works for all items
-      transparent: true,
-      opacity: 0.7
-    });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
+    // Rotating ring
+    const ring = new THREE.Mesh(_itemGeometries.ring, cloneMat(_itemMaterials.ring));
     ring.rotation.x = Math.PI / 2;
     group.add(ring);
     
     // Pulsating inner core
-    const coreGeo = new THREE.IcosahedronGeometry(0.4, 1);
-    const coreMat = new THREE.MeshPhongMaterial({
-      color: 0x00ffff, // Cyan color
-      emissive: 0x00aaaa,
-      emissiveIntensity: 0.6,
-      shininess: 100
-    });
-    const core = new THREE.Mesh(coreGeo, coreMat);
+    const core = new THREE.Mesh(_itemGeometries.core, cloneMat(_itemMaterials.core));
     group.add(core);
     
-    // Add a subtle label or indicator that doesn't reveal the actual item type
-    const indicatorGeo = new THREE.SphereGeometry(0.15, 8, 8);
-    const indicatorMat = new THREE.MeshBasicMaterial({
-      color: 0xffffff, // White indicator
-      transparent: true,
-      opacity: 0.9
-    });
-    const indicator = new THREE.Mesh(indicatorGeo, indicatorMat);
+    // Indicator
+    const indicator = new THREE.Mesh(_itemGeometries.indicator, cloneMat(_itemMaterials.indicator));
     indicator.position.y = 0.8;
     group.add(indicator);
     
     group.position.copy(this.position);
-    group.position.y += 0.5; // Lift off ground slightly
+    group.position.y += 0.5;
 
     return group;
   }
   
-  update(dt) {
+  update(dt, timeAccum) {
     if (this.collected) {
-      // Анимация исчезновения при сборе
       this.collectAnimTime = (this.collectAnimTime || 0) + dt;
-      const progress = this.collectAnimTime / 0.3; // 0.3 секунды на исчезновение
+      const progress = this.collectAnimTime / 0.3;
 
       if (progress >= 1) {
         this.destroy();
-        return true; // Нужно удалить из массива
+        return true;
       }
 
-      // Масштаб уменьшается
       const scale = 1 - progress;
       this.mesh.scale.set(scale, scale, scale);
-      // Поворот ускоряется
       this.mesh.rotation.y += dt * 10;
-      // Прозрачность
       this.mesh.traverse((child) => {
         if (child.material) {
           child.material.opacity = (child.material.opacity || 1) * (1 - progress);
@@ -150,53 +158,22 @@ class TrackItem {
       return false;
     }
 
+    this._timeAccum += dt;
+    
     // Вращение предмета
     this.mesh.rotation.y += dt * 2;
-    this.mesh.rotation.z = Math.sin(Date.now() * 0.003) * 0.2;
+    this.mesh.rotation.z = Math.sin(this._timeAccum * 3) * 0.2;
     
     // Пульсация
-    const scale = 1 + Math.sin(Date.now() * 0.005) * 0.15;
+    const scale = 1 + Math.sin(this._timeAccum * 5) * 0.15;
     this.mesh.scale.set(scale, scale, scale);
     
-    // Дополнительная анимация для особых предметов
-    if (this.type === ItemType.MINE && this.mesh.userData.mineRing) {
-      this.mesh.userData.mineRing.rotation.z += dt * 3;
-      this.mesh.userData.mineRing.scale.setScalar(1 + Math.sin(Date.now() * 0.008) * 0.1);
-    }
-
-    if (this.type === ItemType.SHIELD && this.mesh.userData.shieldParticles) {
-      for (const p of this.mesh.userData.shieldParticles) {
-        p.angle += dt * 2;
-        p.mesh.position.x = Math.cos(p.angle) * 1.4;
-        p.mesh.position.z = Math.sin(p.angle) * 1.4;
-        p.mesh.position.y = Math.sin(Date.now() * 0.005 + p.angle) * 0.3;
-      }
-    }
-
-    // Предметы исчезают через 30 секунд
-    if (Date.now() - this.time > 30000) {
-      this.destroy();
-      return true; // Нужно удалить
-    }
+    // Предметы не исчезают — респавнятся при сборе
     return false;
   }
   
   destroy() {
-    // Удаляем все части группы и их материалы
-    this.mesh.traverse((child) => {
-      if (child.geometry) {
-        child.geometry.dispose();
-      }
-      if (child.material) {
-        if (Array.isArray(child.material)) {
-          child.material.forEach(m => m.dispose());
-        } else {
-          child.material.dispose();
-        }
-      }
-    });
-
-    // Удаляем саму группу из сцены
+    // Просто удаляем группу из сцены — геометрии и материалы кэшированы
     this.scene.remove(this.mesh);
   }
   
@@ -205,13 +182,12 @@ class TrackItem {
     const dist = playerPos.distanceTo(this.position);
     if (dist < threshold) {
       this.collected = true;
-      this.collectAnimTime = 0; // Начинаем анимацию исчезновения
+      this.collectAnimTime = 0;
       return true;
     }
     return false;
   }
 }
-
 /**
  * Основная система предметов
  */
@@ -225,9 +201,9 @@ export class ItemSystem {
     this.maxPlayerItems = 2; // Максимум 2 предмета у игрока
     
     // Спавн предметов на трассе
-    this.spawnInterval = 800; // Каждые 0.8 секунды
+    this.spawnInterval = 500; // Каждые 0.5 секунды (было 800)
     this.lastSpawnTime = 0;
-    this.maxTrackItems = 60; // Максимум 60 предметов на трассе
+    this.maxTrackItems = 100; // Больше предметов на карте (было 60)
     
     // Активные ракеты
     this.activeRockets = [];
@@ -283,8 +259,8 @@ export class ItemSystem {
    * Проверка сбора предметов игроком
    */
   checkItemCollection(playerPos) {
-    // Если у игрока уже есть неиспользованный предмет — новые не подбираем
-    if (this.playerItems.length > 0) return;
+    // Если у игрока уже макс предметов — новые не подбираем
+    if (this.playerItems.length >= this.maxPlayerItems) return;
 
     for (let i = this.trackItems.length - 1; i >= 0; i--) {
       const item = this.trackItems[i];
@@ -347,10 +323,11 @@ export class ItemSystem {
    * Обновление системы
    */
   update(dt, trackSegments) {
-    // Спавн новых предметов — по 3 за раз для быстрого заполнения
+    // Спавн новых предметов — по 3 за раз, каждые 500мс (более стабильно)
     const now = Date.now();
-    if (now - this.lastSpawnTime > this.spawnInterval) {
-      for (let i = 0; i < 3; i++) {
+    if (now - this.lastSpawnTime > 500) {
+      const spawnCount = Math.max(3, this.maxTrackItems - this.trackItems.length);
+      for (let i = 0; i < Math.min(spawnCount, 5); i++) {
         this.spawnItem(trackSegments);
       }
       this.lastSpawnTime = now;
@@ -557,7 +534,7 @@ export class ItemSystem {
         oilBackward.applyQuaternion(car.mesh.quaternion);
         const oilPos = car.mesh.position.clone().add(oilBackward.multiplyScalar(3));
         
-        const oil = new Oil(oilPos, this.scene);
+        const oil = new Oil(oilPos, this.scene, car);
         this.activeOils.push(oil);
         
         // Визуальный эффект
@@ -707,6 +684,8 @@ export class ItemSystem {
   checkOilCollisions(car, onHit = null) {
     for (let i = this.activeOils.length - 1; i >= 0; i--) {
       const oil = this.activeOils[i];
+      // Пропускаем владельца масла — он не должен пострадать от своего же масла
+      if (oil.owner === car) continue;
       if (oil.checkCollision(car)) {
         if (onHit) onHit(oil);
       }

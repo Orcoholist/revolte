@@ -47,13 +47,13 @@ export function createEnvironment(scene, world) {
 
   createSkyWithClouds(scene);
   createArenaWalls(scene, world, SIZE);
-  createMountains(scene);
+  // createMountains(scene); // Mountains removed as per request
   createBuildings(scene);
   // createTrees(scene, world); // Trees removed from map as per request
   createWindmills(scene, world);
   createFlags(scene);
   // createRocks(scene, world); // Removed small stones as per request
-  createTires(scene, world);
+  // createTires(scene, world); // Tires removed as per request — they work poorly as obstacles
 }
 
 function createSkyWithClouds(scene) {
@@ -93,8 +93,8 @@ function createSkyWithClouds(scene) {
 
 function createArenaWalls(scene, world, arenaSize) {
   const half = arenaSize / 2 - 5;
-  const wallH = 2.5;
-  const wallT = 0.4;
+  const wallH = 30;
+  const wallT = 1;
   const fenceTex = makeCanvasTexture((ctx, w, h) => {
     ctx.fillStyle = '#666666'; ctx.fillRect(0, 0, w, h);
     ctx.strokeStyle = '#888888'; ctx.lineWidth = 2;

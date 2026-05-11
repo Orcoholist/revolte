@@ -5,9 +5,10 @@ import * as THREE from 'three';
  * Использует контрольные точки для определения прохождения круга.
  */
 export class LapCounter {
-  constructor(trackSegments, spawnPos, onLapComplete, scene = null) {
+  constructor(trackSegments, spawnPos, onLapComplete, scene = null, spawnRot = null) {
     this.segments = trackSegments;
     this.spawnPos = spawnPos;
+    this.spawnRot = spawnRot || { y: 0 };
     this.onLapComplete = onLapComplete;
     this.scene = scene;
     
@@ -54,15 +55,33 @@ export class LapCounter {
   }
   _createCheckpoints() {
     const checkpoints = [];
+    const maxRadius = 80; // чтобы чекпоинты были видны внутри купола (SIZE/2 ≈ 108)
     
-    // Хаотичные позиции по всей карте 600x600
     for (let i = 0; i < this.checkpointCount; i++) {
+      // Случайная позиция в пределах круга радиусом 80
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 30 + Math.random() * (maxRadius - 30);
       const pos = new THREE.Vector3(
-        (Math.random() - 0.5) * 240,
+        Math.cos(angle) * dist,
         0,
-        (Math.random() - 0.5) * 240
+        Math.sin(angle) * dist
       );
-      checkpoints.push(pos);
+      
+      // Проверка что не слишком близко к другим чекпоинтам
+      let tooClose = false;
+      for (const cp of checkpoints) {
+        if (pos.distanceTo(cp) < 30) {
+          tooClose = true;
+          break;
+        }
+      }
+      
+      if (!tooClose) {
+        checkpoints.push(pos);
+      } else {
+        // Повторяем попытку
+        i--;
+      }
     }
     
     return checkpoints;
@@ -273,6 +292,7 @@ export class LapCounter {
   reset() {
     this.currentCheckpoint = 0;
     this.finishedLaps = 0;
+    this.waitingForFinish = false;
     this.lastPosition = null;
     
     // Скрываем стрелки
@@ -282,6 +302,11 @@ export class LapCounter {
           obj.visible = false;
         }
       });
+    }
+    
+    // Обнуляем счётчик кругов в глобальном состоянии
+    if (window.state) {
+      window.state.lap = 1;
     }
   }
   

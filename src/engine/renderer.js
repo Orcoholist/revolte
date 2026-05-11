@@ -12,7 +12,7 @@ export function createRenderer() {
   renderer.toneMappingExposure = 1.0;
   document.getElementById('game-container').appendChild(renderer.domElement);
   
-  const particleSystem = new ParticleSystem(null); // scene будет передан позже
+  const particleSystem = new ParticleSystem(null);
   
   return { renderer, particleSystem };
 }

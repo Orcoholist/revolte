@@ -6,6 +6,9 @@ dist/
 .DS_Store
 *.log
 
+# Graphify generated artifacts
+graphify-out/
+
 # Koda Configuration
 # Локальный конфиг .koda/ версионируется
 # Глобальный конфиг игнорируется
