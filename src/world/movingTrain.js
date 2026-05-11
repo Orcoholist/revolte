@@ -30,8 +30,8 @@ export class MovingTrain {
     this.mesh.rotation.y += Math.PI;
     this.scene.add(this.mesh);
 
-    // Физическое тело (коллизия) – движется вместе с поездом
-    const bodyShape = new CANNON.Box(new CANNON.Vec3(4, 2, 10));
+    // Физическое тело (коллизия) – уменьшенный хитбокс
+    const bodyShape = new CANNON.Box(new CANNON.Vec3(2, 1.5, 5));
     this.body = new CANNON.Body({ mass: 0 });
     this.body.addShape(bodyShape);
     this.body.position.set(startPos.x, 2.5, startPos.z);
@@ -184,7 +184,8 @@ export class MovingTrain {
     if (!this.alive) return false;
     const carPos = car.mesh ? car.mesh.position : car.chassisBody.position;
     const dist = carPos.distanceTo(this.mesh.position);
-    return dist < 6;
+    // Уменьшенный радиус столкновения – 4 метра
+    return dist < 4;
   }
 
   reset() {
