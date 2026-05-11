@@ -44,9 +44,9 @@ export function createTrack(scene, world) {
     segments.push(new THREE.Vector3(x, 0, z));
   }
 
-  // Создаём точки спавна по кругу вокруг центра (радиус 15)
+  // Создаём точки спавна по кругу вокруг центра (радиус 40)
   const spawnPoints = [];
-  const spawnRadius = 15; // уменьшен с 80 до 15
+  const spawnRadius = 40; // увеличен с 15 до 40
   
   for (let i = 0; i < segmentCount; i++) {
     const angle = (i / segmentCount) * Math.PI * 2;
@@ -54,7 +54,7 @@ export function createTrack(scene, world) {
     const z = Math.sin(angle) * spawnRadius;
     spawnPoints.push({
       position: new THREE.Vector3(x, 1.5, z),
-      rotation: angle + Math.PI // смотрит от центра
+      rotation: angle // смотрит в центр (к поезду)
     });
   }
 
@@ -171,15 +171,15 @@ export function createTrack(scene, world) {
     world.addBody(treeBody);
   }
 
-  // Точка спавна игрока на круге радиусом 15, угол 0 (ось X+)
-  const spawnRadiusPlayer = 15;
+  // Точка спавна игрока на круге радиусом 40, угол 0 (ось X+)
+  const spawnRadiusPlayer = 40;
   const spawnAnglePlayer = 0;
   const spawnPosPlayer = new THREE.Vector3(
     Math.cos(spawnAnglePlayer) * spawnRadiusPlayer,
     1.5,
     Math.sin(spawnAnglePlayer) * spawnRadiusPlayer
   );
-  const spawnRotPlayer = new THREE.Vector3(0, spawnAnglePlayer + Math.PI, 0); // смотрит от центра
+  const spawnRotPlayer = new THREE.Vector3(0, spawnAnglePlayer, 0); // смотрит в центр (к поезду)
 
   // Возвращаем все необходимые данные
   return {

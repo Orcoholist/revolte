@@ -18,16 +18,16 @@ export class MovingTrain {
     this._lastShotTime = 0;
     this.shootInterval = 4; // секунды
 
-    // Размещаем поезд в центре карты
-    this.mesh.position.set(0, 0.5, 0);
+    // Размещаем поезд в центре карты, поднимаем выше, чтобы не был утоплен
+    this.mesh.position.set(0, 2.0, 0);
     this.mesh.scale.set(1.5, 1.5, 1.5);
     this.scene.add(this.mesh);
 
-    // Физическое тело (коллизия)
+    // Физическое тело (коллизия) – тоже поднимаем
     const bodyShape = new CANNON.Box(new CANNON.Vec3(4, 2, 10));
     this.body = new CANNON.Body({ mass: 0 });
     this.body.addShape(bodyShape);
-    this.body.position.set(0, 2, 0);
+    this.body.position.set(0, 2.5, 0);
     this.world.addBody(this.body);
   }
 
@@ -116,8 +116,8 @@ export class MovingTrain {
   }
 
   reset() {
-    this.mesh.position.set(0, 0.5, 0);
-    this.body.position.set(0, 2, 0);
+    this.mesh.position.set(0, 2.0, 0);
+    this.body.position.set(0, 2.5, 0);
     this._timeAccum = 0;
     this._lastShotTime = 0;
     this.alive = true;
