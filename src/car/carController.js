@@ -41,6 +41,10 @@ export class CarController {
     // Для определения элементов трассы
     this.trackElementCheckInterval = 100;
     this.lastTrackCheckTime = 0;
+
+    // Визуальные эффекты ускорения
+    this.boostEffectActive = false;
+    this.originalCarScale = carMesh.scale.clone(); // Сохраняем исходный масштаб
   }
 
   /**
@@ -55,6 +59,29 @@ export class CarController {
       if (this.boostDuration <= 0) {
         this.boostMultiplier = 1.0;
         this.boostDuration = 0;
+        this.boostEffectActive = false;
+        // Возвращаем исходный масштаб
+        this.mesh.scale.copy(this.originalCarScale);
+      } else {
+        // Если буст активен, но эффект еще не применен, применяем его
+        if (!this.boostEffectActive) {
+          this.boostEffectActive = true;
+          this.mesh.scale.multiplyScalar(1.1); // Увеличиваем масштаб машины
+        }
+        // Эмитируем частицы ускорения из выхлопной трубы
+        if (window.particleSystem && this.wheelMeshes && this.wheelMeshes.length >= 2) {
+          // Позиция выхлопной трубы (примерно между задними колесами)
+          const exhaustPos = new THREE.Vector3();
+          exhaustPos.lerpVectors(this.wheelMeshes[2].position, this.wheelMeshes[3].position, 0.5);
+          exhaustPos.y += 0.5; // Немного выше земли
+          
+          // Направление выхлопа (назад от машины)
+          const exhaustDir = new THREE.Vector3(0, 0, 1);
+          exhaustDir.applyQuaternion(this.mesh.quaternion);
+          
+          // Эмитируем частицы выхлопа
+          window.particleSystem.emitExhaust(exhaustPos, exhaustDir, 1.5);
+        }
       }
     }
 
@@ -250,6 +277,27 @@ export class CarController {
   applyBoost(multiplier, duration) {
     this.boostMultiplier = multiplier;
     this.boostDuration = duration / 1000; // конвертируем мс в секунды
+    this.boostEffectActive = true; // Активируем флаг визуального эффекта
+    
+    // Увеличиваем масштаб машины при ускорении
+    this.mesh.scale.multiplyScalar(1.1);
+    
+    // Эмитируем частицы ускорения из выхлопной трубы
+    if (window.particleSystem && this.wheelMeshes && this.wheelMeshes.length >= 2) {
+      // Позиция выхлопной трубы (примерно между задними колесами)
+      const exhaustPos = new THREE.Vector3();
+      exhaustPos.lerpVectors(this.wheelMeshes[2].position, this.wheelMeshes[3].position, 0.5);
+      exhaustPos.y += 0.5; // Немного выше земли
+      
+      // Направление выхлопа (назад от машины)
+      const exhaustDir = new THREE.Vector3(0, 0, 1);
+      exhaustDir.applyQuaternion(this.mesh.quaternion);
+      
+      // Эмитируем частицы выхлопа
+      for (let i = 0; i < 3; i++) { // Эмитируем несколько частиц сразу для более заметного эффекта
+        window.particleSystem.emitExhaust(exhaustPos, exhaustDir, 1.5);
+      }
+    }
   }
 
   /**
@@ -292,6 +340,10 @@ export class CarController {
     this.chassisBody.quaternion.setFromEuler(0, rotY, 0);
     this.chassisBody.velocity.set(0, 0, 0);
     this.chassisBody.angularVelocity.set(0, 0, 0);
+    
+    // Сбрасываем визуальные эффекты
+    this.boostEffectActive = false;
+    this.mesh.scale.copy(this.originalCarScale); // Возвращаем исходный масштаб
   }
   
   hasActiveShield() {
